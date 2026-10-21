@@ -144,6 +144,14 @@ readout) over the scene. Rules:
   Sujuk 90, Nutella 150) set the food economy: price tracks heal value,
   Nutella is the rare full restore.
 
+## Localisation (EN / TR)
+
+Every player-facing string ships in **English and Turkish**, switchable from the
+main menu and settings and remembered between visits. Menus, help, controls,
+shopkeeper dialogue, item names, chapter and boss text, HUD banners and shop
+labels all swap language. Turkish glyphs come from the game's own font build, not
+a fallback font. Dates, prices and the ₺/$ wallet symbol stay locale-correct.
+
 ## Rights / compliance
 
 - All KankaKombat art is original work for this project. Do not copy,
