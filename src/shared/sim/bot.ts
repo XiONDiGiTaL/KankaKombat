@@ -6,9 +6,21 @@ import { BTN, InputFrame } from '../data/input';
 import { ATTACKS } from '../data/attacks';
 import { ITEMS } from '../data/items';
 import { SCREEN_W } from '../data/constants';
-import type { Sim } from './sim';
-import { Ent } from './types';
+import type { ItemId } from '../data/items';
+import { GamePhase, St } from './types';
 import { phaseOf } from './combat';
+
+/** The slice of world state the bot looks at. Both Sim and a client View adapter provide it. */
+export interface BotEnt { id: number; pid: string; x: number; y: number; z: number; hp: number; maxHp: number; st: St; atk: string | null; t: number; boss: boolean; face: 1 | -1; bag: ItemId[]; sel: number; holdHits: number }
+export interface BotWorld {
+  phase: GamePhase; camX: number;
+  players(): BotEnt[]; enemies(): BotEnt[];
+  props: { x: number; z: number; broken: boolean }[];
+  pickups: { kind: 'coin' | 'food'; x: number; z: number }[];
+  hazards: { state: number; z0: number; z1: number }[];
+}
+type Sim = BotWorld;
+type Ent = BotEnt;
 
 export class Bot {
   private prev = 0;
@@ -16,7 +28,7 @@ export class Bot {
   private evadeT = 0;
   private evadeDir = 0;
   private propT = 0;
-  constructor(readonly pid: string, private seed = 1) {}
+  constructor(public pid: string, private seed = 1) {}
 
   think(sim: Sim): InputFrame {
     this.t++;

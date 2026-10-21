@@ -54,6 +54,9 @@ export interface CharSpec {
   head: HeadDef;
   accessories?: Accessory[];
   torsoDetail?: (p: Px, j: Joints, s: CharSpec) => void;
+  baseLean?: number;
+  fistColor?: string;
+  coat?: { color: string; len: number };
 }
 
 export interface Joints {
@@ -76,7 +79,7 @@ export function solve(s: CharSpec, p: Pose): Joints {
   const cx = Math.floor(s.cell[0] / 2);
   const legLen = s.thigh + s.shin;
   const hip: [number, number] = [cx + (p.bx ?? 0), s.ground - legLen - 2 + (p.by ?? 0)];
-  const lean = p.lean ?? 0;
+  const lean = (p.lean ?? 0) + (s.baseLean ?? 0);
   const up: [number, number] = [Math.sin(rad(lean)), -Math.cos(rad(lean))];
   const neck = add(hip, [up[0] * s.torsoLen, up[1] * s.torsoLen]);
   const shoulder = add(hip, [up[0] * (s.torsoLen - 2), up[1] * (s.torsoLen - 2)]);
@@ -126,8 +129,10 @@ function drawArm(s: CharSpec, j: Joints, front: boolean, fist: number | undefine
     L.capsule(cuff[0], cuff[1], ha[0], ha[1], s.armR - 0.4, skinC);
   } else L.capsule(el[0], el[1], ha[0], ha[1], s.armR - 0.3, skinC);
   // fist
-  L.ellipse(ha[0], ha[1], fist ?? 2, fist ?? 2, skinC);
-  L.set(ha[0] + 1, ha[1] - 1, shade(skinC, 1.18));
+  const fc = s.fistColor ? shade(hex(s.fistColor), dark) : skinC;
+  const fr = (fist ?? 2) + (s.fistColor ? 0.8 : 0);
+  L.ellipse(ha[0], ha[1], fr, fr, fc);
+  L.set(ha[0] + 1, ha[1] - 1, shade(fc, 1.18));
   return L;
 }
 
@@ -174,6 +179,11 @@ function drawTorso(s: CharSpec, j: Joints): Px {
     [mid[0] + px * (hw + 0.5 + b), mid[1] + py * (hw + 0.5 + b)],
     [hip[0] + px * (hw + b * 0.6), hip[1] + py * (hw + b * 0.6) + 1],
   ];
+  if (s.coat) {
+    const cc = hex(s.coat.color), l = s.coat.len;
+    L.poly([[hip[0] - px * (hw + 1), hip[1] - 1], [hip[0] + px * (hw + 1 + b * 0.6), hip[1] - 1], [hip[0] + px * (hw + 2) + 1, hip[1] + l], [hip[0] - px * (hw + 3) - 1, hip[1] + l]], cc);
+    L.rect(Math.round(hip[0]), Math.round(hip[1]), 1, l, shade(cc, 0.7));
+  }
   L.poly(pts, c);
   if (b > 0) L.ellipse(mid[0] + px * (hw * 0.4 + b * 0.5), mid[1] + 1, hw * 0.6 + b * 0.5, s.torsoLen * 0.36, c);
   // back-side shading strip
@@ -240,7 +250,9 @@ function drawProp(s: CharSpec, j: Joints, name: string): Px {
   if (!pr) return L;
   const pal: Record<string, RGBA> = {};
   for (const [k, v] of Object.entries(pr.pal)) pal[k] = hex(v);
-  L.map(pr.rows, pal, Math.round(j.haF[0]) + pr.at[0], Math.round(j.haF[1]) + pr.at[1]);
+  const up = j.haF[1] < j.elF[1] - 2;
+  const rows = up ? [...pr.rows].reverse() : pr.rows;
+  L.map(rows, pal, Math.round(j.haF[0]) + pr.at[0], Math.round(j.haF[1]) + (up ? -rows.length - pr.at[1] : pr.at[1]));
   return L.outline();
 }
 
