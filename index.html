@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Kanka Kombat: Nutella Nights</title>
+  <meta name="description" content="An online co-op pixel-art beat-'em-up. Brawl through İstanbul, İzmir, New York and Tampa as B.T. and S.C. — in your browser, no download." />
+  <meta name="theme-color" content="#1a1220" />
+  <meta property="og:title" content="Kanka Kombat: Nutella Nights" />
+  <meta property="og:description" content="Online co-op pixel-art beat-'em-up across İstanbul, İzmir, New York and Tampa." />
+  <meta property="og:image" content="./og.png" />
+  <link rel="icon" href="./favicon.png" />
+</head>
+<body>
+  <div id="app">
+    <div id="stage"><canvas id="screen" width="384" height="216" aria-label="Game screen"></canvas></div>
+
+    <div id="loading" class="screen show">
+      <div class="panel center"><h2>LOADING</h2><div class="bar"><div id="loadbar"></div></div><p id="loadmsg">Warming up the çay…</p></div>
+    </div>
+
+    <div id="title" class="screen">
+      <canvas id="logo" width="320" height="96"></canvas>
+      <p class="blink" id="press">PRESS ENTER / TAP TO START</p>
+      <p class="tiny credit">© XiØN / XiONDiGiTaL — original game, original art &amp; music</p>
+    </div>
+
+    <div id="menu" class="screen">
+      <div class="panel">
+        <h2>MAIN MENU</h2>
+        <nav class="list">
+          <button data-go="solo">SOLO PLAY</button>
+          <button data-go="online">ONLINE CO-OP</button>
+          <button data-go="howto">HOW TO PLAY</button>
+          <button data-go="settings">SETTINGS</button>
+          <button data-go="credits">CREDITS</button>
+        </nav>
+      </div>
+    </div>
+
+    <div id="select" class="screen">
+      <div class="panel wide">
+        <h2 id="select-title">CHOOSE YOUR FIGHTER</h2>
+        <div class="cards" id="cards"></div>
+        <label class="row">NAME <input id="name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Kanka" /></label>
+        <div class="row" id="debug-start" hidden>
+          <label>CHAPTER <select id="dbg-ch"><option value="0">1 İstanbul</option><option value="1">2 İzmir</option><option value="2">3 New York</option><option value="3">4 Tampa</option></select></label>
+          <label>SECTION <select id="dbg-se"><option value="0">1</option><option value="1">2</option><option value="2">Boss</option></select></label>
+        </div>
+        <div class="row buttons" id="select-buttons">
+          <button data-go="menu" class="ghost">BACK</button>
+          <button id="solo-start" class="primary">FIGHT!</button>
+        </div>
+        <div class="row buttons" id="online-buttons" hidden>
+          <button data-go="menu" class="ghost">BACK</button>
+          <button id="create-room" class="primary">CREATE ROOM</button>
+          <input id="join-code" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false" />
+          <button id="join-room">JOIN</button>
+        </div>
+        <p class="tiny" id="net-mode"></p>
+      </div>
+    </div>
+
+    <div id="lobby" class="screen">
+      <div class="panel wide">
+        <h2>ROOM <span id="room-code" class="code">-----</span></h2>
+        <div class="row"><button id="copy-link">COPY INVITE LINK</button><span id="copy-ok" class="tiny"></span></div>
+        <ul id="players" class="players"></ul>
+        <div class="row"><span>FIGHTER:</span><button id="pick-bt" class="pick">B.T.</button><button id="pick-sc" class="pick">S.C.</button></div>
+        <div class="row buttons">
+          <button id="leave-room" class="ghost">LEAVE</button>
+          <button id="ready-btn">READY</button>
+          <button id="start-btn" class="primary">START</button>
+        </div>
+        <p class="tiny" id="lobby-msg">Share the code or link. Everyone readies up, then the host starts.</p>
+      </div>
+    </div>
+
+    <div id="howto" class="screen">
+      <div class="panel wide scroll">
+        <h2>HOW TO PLAY</h2>
+        <div class="cols">
+          <div>
+            <h3>CONTROLS <span class="tiny">(click a key to remap)</span></h3>
+            <table id="keytable" class="keys"></table>
+            <p class="tiny">Gamepad: D-pad/stick move · X light · Y heavy · A jump · B grab · RB block · LB dodge · RT run · LT eat · Back next item · Start start.</p>
+            <button id="reset-keys" class="ghost small">RESET KEYS</button>
+          </div>
+          <div>
+            <h3>FIGHTING</h3>
+            <ul class="tips">
+              <li>Tap <b>LIGHT</b> for combos. B.T. chains 4 hits, S.C. ends with a launching uppercut.</li>
+              <li><b>HEAVY</b> after a light chain is a combo finisher.</li>
+              <li><b>GRAB</b> an enemy in front of you. While holding: <b>LIGHT</b> = knee (3rd knocks down), <b>HEAVY</b> = throw. Hold a direction to throw that way. Thrown enemies bowl over others.</li>
+              <li>Hit enemies enough and they get <b>dizzy</b> — even bosses can be grabbed while dizzy or <b>TIRED</b> after a big special.</li>
+              <li>A flashing <b class="red">!</b> means a big attack is coming: dodge, jump or get out of the way.</li>
+              <li>Watch for the yellow lane warning: trams, taxis, bikes and golf carts hit everyone.</li>
+            </ul>
+            <h3>FOOD &amp; MONEY</h3>
+            <table class="food" id="foodtable"></table>
+            <p class="tiny">Enemies drop coins: whoever touches them first keeps them. Food is picked up with <b>GRAB</b>: eaten at once if it helps, otherwise stored in your 4-slot bag. Turkish chapters pay in lira (₺), American chapters in dollars ($): wallets convert at ₺10 = $1 when you fly to New York. Shops sell into your bag.</p>
+          </div>
+        </div>
+        <div class="row buttons"><button data-back class="ghost">BACK</button></div>
+      </div>
+    </div>
+
+    <div id="settings" class="screen">
+      <div class="panel">
+        <h2>SETTINGS</h2>
+        <label class="row">MUSIC <input type="range" id="vol-music" min="0" max="1" step="0.05" /></label>
+        <label class="row">EFFECTS <input type="range" id="vol-sfx" min="0" max="1" step="0.05" /></label>
+        <label class="row"><input type="checkbox" id="mute" /> MUTE ALL</label>
+        <label class="row"><input type="checkbox" id="shake" /> SCREEN SHAKE</label>
+        <label class="row">TOUCH PAD <select id="touch-mode"><option value="auto">AUTO</option><option value="on">ON</option><option value="off">OFF</option></select></label>
+        <div class="row buttons"><button data-back class="ghost">BACK</button></div>
+      </div>
+    </div>
+
+    <div id="credits" class="screen">
+      <div class="panel">
+        <h2>CREDITS</h2>
+        <p>KANKA KOMBAT: NUTELLA NIGHTS</p>
+        <p class="tiny">Design, code, pixel art &amp; chiptunes generated for XiØN / XiONDiGiTaL. All characters, sprites, music and sound are original to this game. Fonts: Press Start 2P (SIL Open Font License). Nutella is a trademark of Ferrero; it appears here only as a food item. No affiliation.</p>
+        <p class="tiny"><a href="https://xiondigital.net" target="_blank" rel="noopener">xiondigital.net</a> · <a href="https://github.com/XiONDiGiTaL/KankaKombat" target="_blank" rel="noopener">source</a></p>
+        <div class="row buttons"><button data-back class="ghost">BACK</button></div>
+      </div>
+    </div>
+
+    <div id="pause" class="screen">
+      <div class="panel">
+        <h2>PAUSED</h2>
+        <p class="tiny" id="pause-note"></p>
+        <nav class="list">
+          <button id="resume">RESUME</button>
+          <button data-go="howto">HOW TO PLAY</button>
+          <button data-go="settings">SETTINGS</button>
+          <button id="quit">QUIT TO TITLE</button>
+        </nav>
+      </div>
+    </div>
+
+    <div id="shop" class="screen overlay">
+      <div class="panel shop">
+        <h2 id="shop-name">SHOP</h2>
+        <p class="tiny" id="shop-tag"></p>
+        <p>WALLET: <b id="shop-money"></b> · BAG <b id="shop-bag"></b></p>
+        <ul id="shop-list" class="shoplist"></ul>
+        <p class="tiny" id="shop-msg">↑↓ choose · ENTER/LIGHT buy · ESC/GRAB leave</p>
+        <div class="row buttons"><button id="shop-leave" class="ghost">LEAVE SHOP</button></div>
+      </div>
+    </div>
+
+    <div id="ended" class="screen overlay">
+      <div class="panel center">
+        <div class="row buttons"><button id="end-title">TITLE SCREEN</button><button id="end-lobby" class="primary">BACK TO LOBBY</button></div>
+      </div>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <button id="pause-btn" aria-label="Pause">II</button>
+
+    <div id="touch" aria-hidden="true">
+      <div class="dpad">
+        <button data-b="UP" class="u">▲</button><button data-b="LEFT" class="l">◀</button><button data-b="RIGHT" class="r">▶</button><button data-b="DOWN" class="d">▼</button>
+      </div>
+      <div class="abtn">
+        <button data-b="LIGHT" class="big a">PUNCH</button><button data-b="HEAVY" class="big b">HEAVY</button>
+        <button data-b="JUMP" class="big c">JUMP</button><button data-b="GRAB" class="big d">GRAB</button>
+        <button data-b="BLOCK" class="small e">BLK</button><button data-b="DODGE" class="small f">ROLL</button><button data-b="ITEM" class="small g">EAT</button><button data-b="START" class="small h">START</button>
+      </div>
+    </div>
+    <noscript>Kanka Kombat needs JavaScript to run.</noscript>
+  </div>
+  <script type="module" src="./src/client/main.ts"></script>
+</body>
+</html>

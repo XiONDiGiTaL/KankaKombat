@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.gba
+*.nes
+*.sfc
+*.smc
+*.zip
+*.rom
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+.DS_Store
