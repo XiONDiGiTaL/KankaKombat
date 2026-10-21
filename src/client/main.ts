@@ -350,6 +350,8 @@ class App {
     c.onResult = (r) => { if (r.nonce && r.nonce === this.shopPending) { this.shopPending = null; if (!r.ok) { $('shop-msg').textContent = (r.reason ?? 'Cannot buy').toUpperCase(); this.audio.sfx('error'); } } };
     c.onError = (code, msg) => { this.toast(msg, true); if (code === 'room-full' || code === 'room-not-found') this.quitToTitle(false); };
     this.autopilot = AUTOPILOT ? new Bot('', 3) : null;
+    // a local authority answers the hello synchronously, before the callbacks above existed
+    queueMicrotask(() => this.onClientChange());
     return c;
   }
 
