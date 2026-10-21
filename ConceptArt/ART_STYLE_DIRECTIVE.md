@@ -86,6 +86,20 @@ pickups join this sheet's style: same pixel density, dark outlines, sparkle.
 | `enemy_tampa_man_sheet.png` | **The Tampa Man** (Tampa) | Elderly: bald + wispy white side hair, glasses, pastel polo, khaki shorts, socks with sandals. Weapon: wooden cane — overhead swing + poke. Shuffling walk, determined. |
 | `enemy_biyikli_fehmi_sheet.png` | **Bıyıklı Fehmi** (İstanbul) | Red fez, huge handlebar moustache, dark waistcoat over white shirt. Never puts down his tea glass (ince belli on its saucer) — it stays in his hand in every frame, punch included. Behaviour is part of his design: he sips his tea at every turn, so he always stands still for a moment before setting off again — the tea-sipping idle pose is on his sheet; preserve the pause in his animation timing. |
 
+## Stages
+
+Wide panoramic stage designs. Every stage keeps a **clear, flat fighting
+plane across the bottom third** — decoration lives in the backdrop, never
+under the fighters' feet. Skies use banded / dithered color transitions,
+never smooth gradients.
+
+| File | Stage | Mood |
+|---|---|---|
+| `stage_new_york.png` | **New York** | Night. Neon bodega + pizza signs, subway entrance with green globe lamps, brick tenements, fire escapes, water towers, steam vent, moon + skyline silhouette. |
+| `stage_izmir.png` | **İzmir** | Sunset. Kordon promenade + railing, Saat Kulesi clock tower, Konak mosque, ferry on the glittering bay, palm silhouettes, Turkish flags, mountains across the water. |
+| `stage_istanbul.png` | **Istanbul** | Vibrant morning. Cobblestone embankment, Bosphorus + ferry, Galata Tower, domes and minarets, seagulls, market stalls, tea garden. |
+| `stage_tampa.png` | **Tampa** | Relaxed sunny afternoon. Boardwalk fighting plane, pastel beach houses, lifeguard tower, taco truck, palms, pier in the distance, Bayshore Dr sign. |
+
 ## Rights / compliance
 
 - All KankaKombat art is original work for this project. Do not copy,
