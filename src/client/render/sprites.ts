@@ -6,7 +6,7 @@ import type { ViewEnt } from '../../shared/sim/snapshot';
 import { F_RISING } from '../../shared/sim/snapshot';
 
 export interface AtlasAnim { frames: { i: number; t: number; ph?: string }[]; loop: boolean }
-export interface Atlas { id: string; cell: [number, number]; anchor: [number, number]; cols: number; count: number; anims: Record<string, AtlasAnim> }
+export interface Atlas { id: string; cell: [number, number]; anchor: [number, number]; cols: number; count: number; anims: Record<string, AtlasAnim>; head?: [number, number, number, number] }
 export interface Sheet { atlas: Atlas; img: HTMLImageElement; flipped: HTMLCanvasElement; white: HTMLCanvasElement }
 
 const sheets = new Map<string, Sheet>();

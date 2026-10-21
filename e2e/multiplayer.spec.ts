@@ -83,7 +83,7 @@ test('dedicated server: two browsers join a lobby and defeat a boss together', a
   expect(a0.players.length).toBe(2); expect(b0.players.length).toBe(2);
   expect(a0.players.map((p) => p.pid).sort()).toEqual(b0.players.map((p) => p.pid).sort());
 
-  // the bots (driving real inputs in each browser) beat Kemal; both clients see the same result
+  // the bots (driving real inputs in each browser) beat the boss; both clients see the same result
   await waitFor(A.page, (s) => s.phase === 'bossdown' || s.phase === 'chapterclear', 200_000);
   const b1 = await waitFor(B.page, (s) => s.phase === 'bossdown' || s.phase === 'chapterclear', 20_000);
   expect(b1.bossHp === null || b1.bossHp === 0).toBe(true);
@@ -91,7 +91,7 @@ test('dedicated server: two browsers join a lobby and defeat a boss together', a
   await A.page.waitForTimeout(800);
   const sa = (await state(A.page))!, sb = (await state(B.page))!;
   for (const p of sa.players) expect(sb.players.find((x) => x.pid === p.pid)!.money).toBe(p.money);
-  expect(sa.players.reduce((n, p) => n + p.money, 0)).toBeGreaterThanOrEqual(300); // the boss purse, once
+  expect(sa.players.reduce((n, p) => n + p.money, 0)).toBeGreaterThanOrEqual(120); // the boss purse, once
   expect(A.errors).toEqual([]); expect(B.errors).toEqual([]);
 });
 
@@ -109,7 +109,7 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   for (const p of s1.players) expect(g1.players.find((x) => x.pid === p.pid)!.money).toBe(p.money);
   expect(s1.players.reduce((n, p) => n + p.money, 0)).toBeGreaterThan(0);
 
-  // the guest takes over its controls and walks into the tea shop at x=640
+  // the guest takes over its controls and walks into the bodega at x=620
   await B.page.evaluate(() => { (window as any).__kk.autopilot = null; });
   await A.page.evaluate(() => { (window as any).__kk.autopilot = null; });
   const keys: Record<string, string> = { L: 'ArrowLeft', R: 'ArrowRight', U: 'ArrowUp', D: 'ArrowDown' };
@@ -118,10 +118,10 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   while (!inShop && Date.now() - t0 < 60_000) {
     const s = (await state(B.page))!;
     if (!s.me) { await B.page.waitForTimeout(200); continue; }
-    const dx = 640 - s.me.x, dz = 4 - s.me.z;
+    const dx = 620 - s.me.x, dz = 4 - s.me.z;
     if (Math.abs(dx) < 14 && Math.abs(dz) < 8 && ['idle', 'walk', 'run'].includes(s.me.st)) {
       await B.page.keyboard.press('KeyL');
-      inShop = await B.page.waitForSelector('#shop.show', { timeout: 2_000 }).then(() => true, () => false);
+      inShop = await B.page.waitForFunction(() => (window as any).__kk.screen === 'shop', null, { timeout: 2_000 }).then(() => true, () => false);
       continue;
     }
     const hold: string[] = [];
@@ -135,7 +135,7 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   const before = (await state(B.page))!;
   const myPid = await B.page.evaluate(() => (window as any).__kk.client.myId as string);
   const mine = before.players.find((p) => p.pid === myPid)!;
-  // banana (₺35) is the second item in the tea shop; press "buy" twice fast: only one may go through
+  // bananas ($40) are the second item; press "buy" twice fast: only one may go through
   await B.page.keyboard.press('ArrowDown');
   await B.page.waitForTimeout(100);
   await B.page.keyboard.press('KeyJ');
@@ -143,12 +143,12 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   await B.page.waitForTimeout(1200);
   const after = (await state(B.page))!;
   const mineAfter = after.players.find((p) => p.pid === myPid)!;
-  if (mine.money >= 35) {
-    expect(mineAfter.money).toBe(mine.money - 35);
+  if (mine.money >= 40) {
+    expect(mineAfter.money).toBe(mine.money - 40);
     expect(mineAfter.bag).toEqual([...mine.bag, 'banana']);
   } else {
     expect(mineAfter.money).toBe(mine.money); // rejected by the host
-    await expect(B.page.locator('#shop-msg')).toContainText(/NOT ENOUGH/);
+    await expect.poll(() => B.page.evaluate(() => (window as any).__kk.shopMsg)).toContain('NOT ENOUGH');
   }
   // the host (authority) sees exactly the same wallet and bag
   await A.page.waitForTimeout(500);
@@ -156,7 +156,7 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   expect(hostView.money).toBe(mineAfter.money);
   expect(hostView.bag).toEqual(mineAfter.bag);
   await B.page.keyboard.press('KeyL');
-  await B.page.waitForSelector('#shop.show', { state: 'hidden' });
+  await B.page.waitForFunction(() => (window as any).__kk.screen !== 'shop');
 
   // disconnect: the host keeps playing alone
   await B.page.reload();

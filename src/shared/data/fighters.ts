@@ -1,6 +1,6 @@
-// Playable protagonists. Both are available from the start and play very differently:
-// B.T. is quick with a four-hit chain and a fast dodge; S.C. hits hard, holds grabs
-// longer and throws further.
+// Playable protagonists. Two heroes, available from the start, each with a distinct feel.
+// B.T. is the fast combo fighter, S.C. the power grappler. (The MUSE sheet in ConceptArt is
+// a style reference only, not a playable character.)
 
 export interface FighterDef {
   id: 'bt' | 'sc';
@@ -12,13 +12,16 @@ export interface FighterDef {
   jumpV: number;
   defense: number;          // incoming damage is divided by this
   light: string; heavy: string; jumpAtk: string; runAtk: string; grabAtk: string;
-  grabHold: number;         // ticks a grabbed enemy stays held
+  grabHold: number;
   throwSpeed: number; throwDamage: number;
   dodgeTicks: number; dodgeInvuln: number; dodgeSpeed: number;
   stats: { power: number; speed: number; grapple: number; toughness: number };
 }
 
-export const FIGHTERS: Record<'bt' | 'sc', FighterDef> = {
+export const FIGHTER_IDS = ['bt', 'sc'] as const;
+export type FighterId = (typeof FIGHTER_IDS)[number];
+
+export const FIGHTERS: Record<FighterId, FighterDef> = {
   bt: {
     id: 'bt', name: 'B.T.', blurb: 'Speed & combos. Four-hit chains, crescent kick, lightning dodge.', sheet: 'bt',
     maxHp: 100, walk: 1.6, walkZ: 1.05, run: 3.2, jumpV: 4.6, defense: 1.0,
@@ -36,5 +39,3 @@ export const FIGHTERS: Record<'bt' | 'sc', FighterDef> = {
     stats: { power: 5, speed: 2, grapple: 5, toughness: 4 },
   },
 };
-export const FIGHTER_IDS = ['bt', 'sc'] as const;
-export type FighterId = (typeof FIGHTER_IDS)[number];

@@ -5,7 +5,7 @@
 // - Bag items refuse to be used when they would be wasted.
 // - Purchases need the shop's stock, enough money and a free bag slot.
 
-import { BAG_SLOTS, MAX_LIVES } from '../data/constants';
+import { BAG_SLOTS } from '../data/constants';
 import { ITEMS, ITEM_IDS, ItemId } from '../data/items';
 import { SHOPS } from '../data/shops';
 import type { Sim } from './sim';
@@ -18,7 +18,7 @@ export function spawnCoin(sim: Sim, amount: number, x: number, z: number): void 
 
 export function spawnFood(sim: Sim, item: ItemId | null, x: number, z: number, vy: number): void {
   const it = item ?? sim.rng.weighted(ITEM_IDS.map((id) => ({ w: ITEMS[id].dropWeight, v: id })));
-  sim.pickups.push({ id: sim.nextId++, kind: 'food', item: it, amount: 0, x, y: vy > 0 ? 2 : 0, z, vy, ttl: -1, taken: false });
+  sim.pickups.push({ id: sim.nextId++, kind: 'food', item: it, amount: 0, x, y: vy > 0 ? 2 : 0, z, vy, ttl: 60 * 25, taken: false });
 }
 
 export function updatePickups(sim: Sim): void {
@@ -43,18 +43,8 @@ export function updatePickups(sim: Sim): void {
 /** Apply an item's effect. Returns false (and changes nothing) if it would be wasted. */
 function consume(sim: Sim, p: Ent, item: ItemId): boolean {
   const d = ITEMS[item];
-  if (d.life) {
-    if (p.lives >= MAX_LIVES) return false;
-    p.lives = Math.min(MAX_LIVES, p.lives + d.life);
-    sim.emit({ k: 'oneup', id: p.id });
-    setState(p, 'eat');
-    return true;
-  }
-  if (p.hp >= p.maxHp && !d.buff) return false;
-  if (p.hp >= p.maxHp && d.buff) return false;
+  if (p.hp >= p.maxHp) return false;
   p.hp = d.heal === Infinity ? p.maxHp : Math.min(p.maxHp, p.hp + d.heal);
-  if (d.buff?.kind === 'speed') p.speedT = d.buff.ticks;
-  if (d.buff?.kind === 'power') p.powerT = d.buff.ticks;
   setState(p, 'eat'); p.vx = 0; p.vz = 0;
   sim.emit({ k: 'eat', id: p.id, item });
   return true;
@@ -96,7 +86,7 @@ export function useItem(sim: Sim, p: Ent, slot: number): { ok: boolean; reason?:
   const item = p.bag[slot];
   const wasShop = p.st === 'shop';
   if (!consume(sim, p, item)) {
-    const text = ITEMS[item].life ? 'MAX LIVES!' : 'FULL HP!';
+    const text = 'FULL HP!';
     sim.emit({ k: 'msg', id: p.id, text });
     return { ok: false, reason: text };
   }
@@ -112,7 +102,7 @@ export function buyItem(sim: Sim, p: Ent, item: string): { ok: boolean; reason?:
   const shop = shopId ? SHOPS[shopId] : null;
   if (!shop || !shop.stock.includes(item as ItemId)) return { ok: false, reason: 'not sold here' };
   const d = ITEMS[item as ItemId];
-  const price = sim.currency === 'TRY' ? d.priceTRY : d.priceUSD;
+  const price = d.price;
   if (p.money < price) { sim.emit({ k: 'msg', id: p.id, text: 'NOT ENOUGH MONEY' }); return { ok: false, reason: 'not enough money' }; }
   if (p.bag.length >= BAG_SLOTS) { sim.emit({ k: 'msg', id: p.id, text: 'BAG FULL!' }); return { ok: false, reason: 'bag full' }; }
   p.money -= price;
@@ -125,9 +115,9 @@ export function breakProp(sim: Sim, pr: Prop, dmg: number): void {
   if (pr.broken) return;
   pr.hp -= dmg;
   sim.emit({ k: 'hit', x: pr.x, y: 10, z: pr.z, heavy: false, dmg: 0, tgt: -1 });
-  if (pr.hp > 0) return;
+  if (pr.hp > 0) { sim.emit({ k: 'prophit', id: pr.id, x: pr.x, z: pr.z, hp: pr.hp }); return; }
   pr.broken = true;
-  sim.emit({ k: 'break', x: pr.x, z: pr.z });
+  sim.emit({ k: 'break', x: pr.x, z: pr.z, id: pr.id });
   if (pr.drop === 'coin') spawnCoin(sim, sim.currency === 'TRY' ? sim.rng.int(15, 40) : sim.rng.int(2, 4), pr.x, pr.z);
   else if (pr.drop) spawnFood(sim, pr.drop as ItemId, pr.x, pr.z, 2.5);
 }

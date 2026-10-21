@@ -12,7 +12,8 @@ export default defineConfig({
     viewport: { width: 960, height: 600 },
   },
   webServer: {
-    command: `npx vite build --logLevel warn && PORT=${PORT} KK_ALLOW_DEBUG=1 npx tsx src/server/index.ts`,
+    command: 'npx vite build --logLevel warn && npx tsx src/server/index.ts',
+    env: { ...process.env, PORT: String(PORT), KK_ALLOW_DEBUG: '1' },
     url: `http://localhost:${PORT}/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -8,7 +8,8 @@ export interface Frame { p: Pose; t: number; ph?: 's' | 'a' | 'r' }
 export interface Anim { frames: Frame[]; loop: boolean }
 export type AnimSet = Record<string, Anim>;
 
-const G: Pose = { af: [22, 112], ab: [14, 118], lf: [14, 6], lb: [-12, 6], fistF: 2.2, fistB: 2 }; // guard stance
+// relaxed fighting stance: weight on the back foot, front foot forward, hands loose by the hips
+const G: Pose = { af: [10, 28], ab: [-6, 22], lf: [8, 4], lb: [-10, 8], fistF: 1.9, fistB: 1.85 };
 const f = (p: Pose, t: number, ph?: Frame['ph']): Frame => ({ p, t, ph });
 const m = (...ps: Pose[]): Pose => Object.assign({}, ...ps);
 
@@ -21,7 +22,7 @@ function walkCycle(n: number, swing: number, lean: number, armSwing: number, kne
       lean, by: Math.abs(c) < 0.5 ? -1 : 0,
       lf: [swing * s, kneeLift * Math.max(0, -c) + 6],
       lb: [-swing * s, kneeLift * Math.max(0, c) + 6],
-      af: [-armSwing * s + 10, 70], ab: [armSwing * s - 5, 70],
+      af: [-armSwing * s + 6, 24], ab: [armSwing * s - 5, 20],
     }, 5));
   }
   return out;

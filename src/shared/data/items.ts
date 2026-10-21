@@ -1,4 +1,6 @@
-// Food and recovery items. Every number here is live gameplay, not flavour text.
+// Food and recovery items. Heal tiers and prices come straight from the approved
+// pickup/destructible sheets and the shop concept: Ayran small, Lahmacun/Bananas
+// medium, Baklava/Sujuk large, Nutella the rare full restore.
 
 export type ItemId = 'nutella' | 'banana' | 'baklava' | 'sujuk' | 'lahmacun' | 'ayran';
 
@@ -7,19 +9,16 @@ export interface ItemDef {
   name: string;
   desc: string;
   heal: number;              // HP restored; Infinity = full
-  life?: number;             // extra lives granted
-  buff?: { kind: 'speed' | 'power'; mul: number; ticks: number };
-  priceTRY: number;
-  priceUSD: number;
+  price: number;             // universal kanka cash, shown with the city's symbol
   dropWeight: number;
 }
 
 export const ITEMS: Record<ItemId, ItemDef> = {
-  nutella: { id: 'nutella', name: 'Nutella Jar', desc: 'Restores 22 HP.', heal: 22, priceTRY: 60, priceUSD: 6, dropWeight: 30 },
-  banana: { id: 'banana', name: 'Banana', desc: 'Restores 15 HP and +25% speed for 8s.', heal: 15, buff: { kind: 'speed', mul: 1.25, ticks: 480 }, priceTRY: 35, priceUSD: 3, dropWeight: 30 },
-  baklava: { id: 'baklava', name: 'Baklava', desc: 'Restores 45 HP.', heal: 45, priceTRY: 100, priceUSD: 10, dropWeight: 16 },
-  sujuk: { id: 'sujuk', name: 'Sujuk', desc: 'Restores 35 HP and +30% damage for 10s.', heal: 35, buff: { kind: 'power', mul: 1.3, ticks: 600 }, priceTRY: 120, priceUSD: 12, dropWeight: 12 },
-  lahmacun: { id: 'lahmacun', name: 'Lahmacun', desc: 'Restores ALL HP.', heal: Infinity, priceTRY: 220, priceUSD: 22, dropWeight: 6 },
-  ayran: { id: 'ayran', name: 'Ayran', desc: '+1 life (max 5).', heal: 0, life: 1, priceTRY: 300, priceUSD: 30, dropWeight: 3 },
+  ayran: { id: 'ayran', name: 'Ayran', desc: 'Small heal.', heal: 25, price: 30, dropWeight: 28 },
+  banana: { id: 'banana', name: 'Bananas', desc: 'Medium heal.', heal: 45, price: 40, dropWeight: 26 },
+  lahmacun: { id: 'lahmacun', name: 'Lahmacun', desc: 'Medium heal.', heal: 45, price: 50, dropWeight: 18 },
+  baklava: { id: 'baklava', name: 'Baklava', desc: 'Large heal.', heal: 70, price: 80, dropWeight: 12 },
+  sujuk: { id: 'sujuk', name: 'Sujuk', desc: 'Large heal.', heal: 70, price: 90, dropWeight: 10 },
+  nutella: { id: 'nutella', name: 'Nutella', desc: 'Full restore. Rare.', heal: Infinity, price: 150, dropWeight: 4 },
 };
 export const ITEM_IDS = Object.keys(ITEMS) as ItemId[];

@@ -10,9 +10,11 @@ Status legend: [x] done and verified · [~] partially done · [ ] not started
 - [x] Authoritative simulation (src/shared/sim): movement, depth axis, combat, combos, block, dodge, grabs and throws, juggle cap, dizzy, poise and armor, props, hazards, projectiles, AI tokens, bosses with phases, telegraphs and tired windows
 - [x] Items: 6 foods with real effects, bag, shops, currency per country with conversion at the US border, XP and levels
 - [x] Campaign: 4 chapters × 3 sections, waves, shops, 4 named bosses, continues
-- [x] Networking: versioned and validated protocol, HostSession (server and relay), reconnect by token, drop-in, rate limiting
+- [x] Networking: versioned and validated protocol, HostSession (server and relay), reconnect by token, drop-in, rate limiting; static-host-friendly room codes over the Supabase Realtime relay
+- [x] Roster locked to B.T. and S.C. (MUSE concept sheet kept as reference only)
 - [x] Client: renderer, 12 procedural backgrounds, HUD, overlays, FX, WebAudio chiptunes and SFX, keyboard (remappable), gamepad, touch, all menus
 - [x] Tests: 46 vitest unit/integration tests (including a full 4-chapter bot campaign); 3 Playwright e2e tests with two separate browser contexts (dedicated server boss fight; relay street fight, shop, reconnect; bad room code)
-- [ ] Deployment workflow (GitHub Pages) plus server deployment config
-- [ ] README, screenshots, promo MP4
+- [x] Deployment workflow (GitHub Pages, Actions artifact build) — live at xiondigital.net/kankakombat; the optional Node server stays available for self-hosting
+- [ ] Dedicated-server deployment config (Render/Fly) — not needed for the Pages release, since relay rooms are host-authoritative
+- [~] README and screenshots done; promo MP4 still open
 - [ ] Visual polish pass per chapter

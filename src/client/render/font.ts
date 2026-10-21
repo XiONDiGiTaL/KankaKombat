@@ -1,7 +1,13 @@
-// 5x7 bitmap font (original), with Turkish letters and the lira sign, drawn as crisp
-// pixels into the low-resolution game canvas.
+// The game's own bitmap fonts, transcribed from ConceptArt/font_lettering_sheet.png.
+// TITLE: chunky 7x8 arcade caps for headers, prices and signage.
+// HUD:    compact 5x7 white caps for body text and numbers.
+// Nothing in the UI uses a system or default font.
 
-const G: Record<string, string> = {
+const HUD_W = 5, HUD_H = 7;
+const TITLE_W = 7, TITLE_H = 8;
+
+// ------------------------------------------------------------------ HUD 5x7
+const H: Record<string, string> = {
   A: '01110100011000111111100011000110001', B: '11110100011000111110100011000111110', C: '01110100011000010000100001000101110',
   D: '11110100011000110001100011000111110', E: '11111100001000011110100001000011111', F: '11111100001000011110100001000010000',
   G: '01110100011000010111100011000101111', H: '10001100011000111111100011000110001', I: '01110001000010000100001000010001110',
@@ -24,41 +30,171 @@ const G: Record<string, string> = {
   '*': '00000001001010101110101010010000000', '"': '01010010100000000000000000000000000', '&': '01100100101010001000101011001001101',
   '♥': '00000010101111111111011100010000000', '▶': '01000011000111001111011100110001000', '◀': '00010001100111011110011100011000010',
   '▲': '00000000000010001110111110000000000', '▼': '00000000001111101110001000000000000', '×': '00000100010101000100010101000100000',
-  ' ': '00000000000000000000000000000000000',
-  Ç: '01111100001000010000011110010001100', Ğ: '01110000000111110000100111000101111', İ: '00100011100010000100001000010001110',
-  Ö: '01010000000111010001100011000101110', Ş: '01111100000111000001111100010001100', Ü: '01010000001000110001100011000101110',
-  É: '00010001001111110000111101000011111',
+  '·': '00000000000000000100000000000000000', ' ': '00000000000000000000000000000000000',
 };
 
-export const FONT_H = 7;
-export const FONT_W = 5;
+// ------------------------------------------------------------------ TITLE 7x8
+const T: Record<string, string[]> = {
+  A: ['.#####.', '##...##', '##...##', '##...##', '#######', '##...##', '##...##', '##...##'],
+  B: ['######.', '##...##', '##...##', '##...##', '######.', '##...##', '##...##', '######.'],
+  C: ['.#####.', '##...##', '##.....', '##.....', '##.....', '##.....', '##...##', '.#####.'],
+  D: ['#####..', '##..##.', '##...##', '##...##', '##...##', '##...##', '##..##.', '#####..'],
+  E: ['#######', '##.....', '##.....', '##.....', '#####..', '##.....', '##.....', '#######'],
+  F: ['#######', '##.....', '##.....', '##.....', '#####..', '##.....', '##.....', '##.....'],
+  G: ['.#####.', '##...##', '##.....', '##.....', '##..###', '##...##', '##...##', '.#####.'],
+  H: ['##...##', '##...##', '##...##', '##...##', '#######', '##...##', '##...##', '##...##'],
+  I: ['.#####.', '...##..', '...##..', '...##..', '...##..', '...##..', '...##..', '.#####.'],
+  J: ['..#####', '....##.', '....##.', '....##.', '....##.', '....##.', '##..##.', '.####..'],
+  K: ['##...##', '##..##.', '##.##..', '####...', '###....', '##.##..', '##..##.', '##...##'],
+  L: ['##.....', '##.....', '##.....', '##.....', '##.....', '##.....', '##.....', '#######'],
+  M: ['##...##', '###.###', '#######', '##.#.##', '##...##', '##...##', '##...##', '##...##'],
+  N: ['##...##', '###..##', '####.##', '##.####', '##..###', '##...##', '##...##', '##...##'],
+  O: ['.#####.', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '.#####.'],
+  P: ['######.', '##...##', '##...##', '##...##', '######.', '##.....', '##.....', '##.....'],
+  Q: ['.#####.', '##...##', '##...##', '##...##', '##...##', '##.#.##', '##..##.', '.####.#'],
+  R: ['######.', '##...##', '##...##', '##...##', '######.', '##.##..', '##..##.', '##...##'],
+  S: ['.#####.', '##...##', '##.....', '.#####.', '.....##', '.....##', '##...##', '.#####.'],
+  T: ['#######', '...##..', '...##..', '...##..', '...##..', '...##..', '...##..', '...##..'],
+  U: ['##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '##...##', '.#####.'],
+  V: ['##...##', '##...##', '##...##', '##...##', '.##.##.', '.##.##.', '..###..', '...#...'],
+  W: ['##...##', '##...##', '##...##', '##.#.##', '##.#.##', '#######', '###.###', '##...##'],
+  X: ['##...##', '##...##', '.##.##.', '..###..', '..###..', '.##.##.', '##...##', '##...##'],
+  Y: ['##...##', '##...##', '.##.##.', '..###..', '...##..', '...##..', '...##..', '...##..'],
+  Z: ['#######', '.....##', '....##.', '...##..', '..##...', '.##....', '##.....', '#######'],
+  '0': ['.#####.', '##...##', '##..###', '##.#.##', '###..##', '##...##', '##...##', '.#####.'],
+  '1': ['...##..', '..###..', '.####..', '...##..', '...##..', '...##..', '...##..', '.#####.'],
+  '2': ['.#####.', '##...##', '....##.', '...##..', '..##...', '.##....', '##.....', '#######'],
+  '3': ['#######', '....##.', '...##..', '..####.', '.....##', '.....##', '##...##', '.#####.'],
+  '4': ['....##.', '...###.', '..####.', '.##.##.', '##..##.', '#######', '....##.', '....##.'],
+  '5': ['#######', '##.....', '######.', '.....##', '.....##', '.....##', '##...##', '.#####.'],
+  '6': ['..####.', '.##....', '##.....', '######.', '##...##', '##...##', '##...##', '.#####.'],
+  '7': ['#######', '.....##', '....##.', '...##..', '..##...', '..##...', '..##...', '..##...'],
+  '8': ['.#####.', '##...##', '##...##', '.#####.', '##...##', '##...##', '##...##', '.#####.'],
+  '9': ['.#####.', '##...##', '##...##', '##...##', '.######', '.....##', '....##.', '.####..'],
+  '.': ['.......', '.......', '.......', '.......', '.......', '.......', '...##..', '...##..'],
+  ',': ['.......', '.......', '.......', '.......', '.......', '...##..', '...##..', '..#....'],
+  '!': ['...##..', '...##..', '...##..', '...##..', '...##..', '...##..', '.......', '...##..'],
+  '?': ['.#####.', '##...##', '....##.', '...##..', '..##...', '..##...', '.......', '..##...'],
+  "'": ['...##..', '...##..', '...#...', '.......', '.......', '.......', '.......', '.......'],
+  '"': ['..##.##', '..##.##', '..#..#.', '.......', '.......', '.......', '.......', '.......'],
+  ':': ['.......', '...##..', '...##..', '.......', '...##..', '...##..', '.......', '.......'],
+  '-': ['.......', '.......', '.......', '.#####.', '.......', '.......', '.......', '.......'],
+  '+': ['.......', '...##..', '...##..', '.#####.', '...##..', '...##..', '.......', '.......'],
+  '/': ['.....##', '....##.', '...##..', '..##...', '..##...', '.##....', '##.....', '.......'],
+  '&': ['.###...', '##.##..', '##.##..', '.###...', '##.#.##', '##..###', '##...##', '.###.##'],
+  '$': ['...##..', '.#####.', '##.##..', '.#####.', '..##.##', '.#####.', '...##..', '.......'],
+  '₺': ['..##...', '#######', '..##...', '.#.#.#.', '..##...', '.#.#.#.', '..##...', '.......'],
+  '×': ['.......', '##...##', '.##.##.', '..###..', '.##.##.', '##...##', '.......', '.......'],
+  '(': ['....##.', '...##..', '..##...', '..##...', '..##...', '...##..', '....##.', '.......'],
+  ')': ['.##....', '..##...', '...##..', '...##..', '...##..', '..##...', '.##....', '.......'],
+  '%': ['##...##', '##..##.', '...##..', '..##...', '.##....', '##...##', '......#', '.......'],
+  '♥': ['.......', '.##.##.', '#######', '#######', '.#####.', '..###..', '...#...', '.......'],
+  '★': ['...##..', '...##..', '.#####.', '#######', '.#####.', '.##.##.', '##...##', '.......'],
+  ' ': ['.......', '.......', '.......', '.......', '.......', '.......', '.......', '.......'],
+};
 
-function glyph(ch: string): string {
-  return G[ch] ?? G[ch.toUpperCase()] ?? G['?'];
+// Turkish marks, drawn relative to the glyph origin. The base letter is unchanged.
+const TURKISH: Record<string, { base: string; mark: 'cedilla' | 'breve' | 'dot' | 'umlaut' }> = {
+  Ç: { base: 'C', mark: 'cedilla' }, Ğ: { base: 'G', mark: 'breve' }, İ: { base: 'I', mark: 'dot' },
+  Ö: { base: 'O', mark: 'umlaut' }, Ş: { base: 'S', mark: 'cedilla' }, Ü: { base: 'U', mark: 'umlaut' },
+};
+
+export function parseTurkish(ch: string): { base: string; mark?: 'cedilla' | 'breve' | 'dot' | 'umlaut' } {
+  const t = TURKISH[ch];
+  return t ? { base: t.base, mark: t.mark } : { base: ch };
+}
+
+function hudGlyph(ch: string): string {
+  return H[ch] ?? H[ch.toUpperCase()] ?? H['?'];
 }
 
 export function textWidth(s: string, scale = 1): number {
-  return Math.max(0, s.length * (FONT_W + 1) * scale - scale);
+  return Math.max(0, s.length * (HUD_W + 1) * scale - scale);
 }
 
-/** Draw text with an optional 1px dark shadow/outline for readability over busy art. */
-export function drawText(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color = '#fff', opts: { scale?: number; shadow?: string | null; align?: 'left' | 'center' | 'right'; outline?: boolean } = {}): void {
+export function titleWidth(s: string, scale = 1): number {
+  return Math.max(0, s.length * (TITLE_W + 2) * scale - 2 * scale);
+}
+
+function markPixels(mark: 'cedilla' | 'breve' | 'dot' | 'umlaut'): [number, number][] {
+  switch (mark) {
+    case 'dot': return [[1, -2], [2, -2]];
+    case 'umlaut': return [[0, -2], [1, -2], [3, -2], [4, -2]];
+    case 'breve': return [[0, -2], [1, -3], [2, -3], [3, -3], [4, -2]];
+    case 'cedilla': return [[1, 1], [2, 1], [1, 2], [0, 2]];
+  }
+}
+
+function drawMark(ctx: CanvasRenderingContext2D, ch: string, ox: number, oy: number, sc: number, rowH: number, color: string): void {
+  const t = TURKISH[ch];
+  if (!t) return;
+  ctx.fillStyle = color;
+  for (const [mx, my] of markPixels(t.mark)) {
+    const yy = t.mark === 'cedilla' ? oy + rowH * sc + my * sc : oy + my * sc;
+    ctx.fillRect(ox + mx * sc, yy, sc, sc);
+  }
+}
+
+interface TextOpts { scale?: number; shadow?: string | null; align?: 'left' | 'center' | 'right'; outline?: boolean; font?: 'hud' | 'title'; color2?: string }
+
+function outlinePasses(sc: number): [number, number][] {
+  return [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1], [-1, -1], [1, -1], [-1, 1]].map(([x, y]) => [x * sc, y * sc]);
+}
+
+export function drawText(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color = '#fff', opts: TextOpts = {}): void {
+  const title = opts.font === 'title';
   const sc = opts.scale ?? 1;
   const str = s.toUpperCase();
-  const w = textWidth(str, sc);
+  const gw = title ? TITLE_W : HUD_W, gh = title ? TITLE_H : HUD_H, adv = title ? TITLE_W + 2 : HUD_W + 1;
+  const w = title ? titleWidth(str, sc) : textWidth(str, sc);
   const ox = Math.round(opts.align === 'center' ? x - w / 2 : opts.align === 'right' ? x - w : x);
   const oy = Math.round(y);
+  const sh = opts.shadow === undefined ? '#1a1220' : opts.shadow;
+  const shadowCol = sh ?? '#1a1220';
+
   const pass = (dx: number, dy: number, col: string) => {
     ctx.fillStyle = col;
     let cx = ox;
     for (const ch of str) {
-      const g = glyph(ch);
-      for (let i = 0; i < 35; i++) if (g.charCodeAt(i) === 49) ctx.fillRect(cx + (i % 5) * sc + dx, oy + Math.floor(i / 5) * sc + dy, sc, sc);
-      cx += (FONT_W + 1) * sc;
+      const { base } = parseTurkish(ch);
+      if (title) {
+        const rows = T[base] ?? T['?'];
+        for (let ry = 0; ry < gh; ry++) {
+          const row = rows[ry];
+          for (let rx = 0; rx < gw; rx++) if (row[rx] === '#') ctx.fillRect(cx + rx * sc + dx, oy + ry * sc + dy, sc, sc);
+        }
+        drawMark(ctx, ch, cx + dx, oy + dy, sc, gh, col);
+      } else {
+        const g = hudGlyph(base);
+        for (let i = 0; i < HUD_W * HUD_H; i++) if (g.charCodeAt(i) === 49) ctx.fillRect(cx + (i % HUD_W) * sc + dx, oy + Math.floor(i / HUD_W) * sc + dy, sc, sc);
+        drawMark(ctx, ch, cx + dx, oy + dy, sc, gh, col);
+      }
+      cx += adv * sc;
     }
   };
-  const sh = opts.shadow === undefined ? '#1a1220' : opts.shadow;
-  if (opts.outline && sh) { for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]]) pass(dx * sc, dy * sc, sh); }
-  else if (sh) pass(sc, sc, sh);
-  pass(0, 0, color);
+
+  if (title) {
+    // deep drop shadow, near-black outline, then the fill (gold with a bright top edge)
+    pass(sc * 2, sc * 2, '#0e0812');
+    for (const [dx, dy] of outlinePasses(sc)) pass(dx, dy, shadowCol);
+    pass(0, 0, color);
+  } else if (opts.outline) {
+    for (const [dx, dy] of outlinePasses(sc)) pass(dx, dy, shadowCol);
+    pass(0, 0, color);
+  } else if (sh) {
+    pass(sc, sc, shadowCol);
+    pass(0, 0, color);
+  } else pass(0, 0, color);
 }
+
+/** Title-font convenience wrapper used by headers, banners and signage. */
+export function drawTitle(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color = '#f0c818', opts: TextOpts = {}): void {
+  drawText(ctx, s, x, y, color, { ...opts, font: 'title' });
+}
+
+/** Glyph data for the build-time webfont generator (tools/font/build.ts). */
+export const FONT_DATA = {
+  hud: { w: HUD_W, h: HUD_H, adv: HUD_W + 1, glyphs: H as Record<string, string> },
+  title: { w: TITLE_W, h: TITLE_H, adv: TITLE_W + 2, glyphs: T as Record<string, string[]> },
+  turkish: TURKISH,
+};

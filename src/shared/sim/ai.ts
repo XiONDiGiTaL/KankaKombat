@@ -94,6 +94,13 @@ export function aiTick(sim: Sim, e: Ent): void {
   wantZ = detour(sim, e, wantX, wantZ);
   const mx = Math.abs(wantX - e.x) > 3 ? Math.sign(wantX - e.x) : 0;
   const mz = Math.abs(wantZ - e.z) > 2 ? Math.sign(wantZ - e.z) : 0;
+  // Bıyıklı Fehmi always pauses for a sip before he sets off again.
+  if (def.sip && (mx || mz) && e.st !== 'walk') {
+    ai.sipT = ai.sipT ?? 0;
+    if (ai.sipT > 0) { ai.sipT--; e.vx = e.vz = 0; return; }
+    if (ai.sipT === 0) { ai.sipT = -40; e.vx = e.vz = 0; return; }
+  }
+  if (!mx && !mz) ai.sipT = 0;
   move(e, mx, mz, def, speedMul);
   e.face = dx >= 0 ? 1 : -1;
   if (!mx && !mz && sim.rng.chance(0.004)) quip(sim, e);
