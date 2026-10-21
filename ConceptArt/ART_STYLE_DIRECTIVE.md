@@ -133,9 +133,11 @@ readout) over the scene. Rules:
   bakkal/pastane, Istanbul bazaar shop, Tampa beach/taco spot — reusing
   the same menu panel and font.
 - Shops are reached through enterable storefronts on the stage maps
-  (marked door + sign in the title font), or, where an interior is too
-  heavy, a street vendor NPC with a booth stand on the street who opens
-  the same menu as an overlay.
+  (marked door + sign in the title font) — see `shop_fronts_vendors.png`
+  for the four stage fronts (BODEGA / BAKKAL / PAZAR / TACOS shack) — or,
+  where an interior is too heavy, a street vendor NPC with a booth stand
+  on the street who opens the same menu as an overlay (same sheet: NY
+  hot-dog cart, İzmir simit cart, Istanbul tea stand, Tampa taco truck).
 - Buying is instant-use or carry-one-item; the player cannot be attacked
   inside a shop; exiting returns them to the exact spot outside the door.
 - Prices on the concept (Lahmacun 50, Ayran 30, Bananas 40, Baklava 80,
