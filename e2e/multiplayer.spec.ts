@@ -103,7 +103,7 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   await joinAndStart(A.page, B.page);
 
   // fight through the first two waves together
-  await waitFor(A.page, (s) => s.phase === 'play' && s.camX >= 470 && s.lockX === null && s.enemies === 0, 200_000);
+  await waitFor(A.page, (s) => s.phase === 'play' && s.camX >= 480 && s.lockX === null && s.enemies === 0, 200_000);
   const s1 = (await state(A.page))!;
   const g1 = (await state(B.page))!;
   for (const p of s1.players) expect(g1.players.find((x) => x.pid === p.pid)!.money).toBe(p.money);
@@ -113,20 +113,25 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   await B.page.evaluate(() => { (window as any).__kk.autopilot = null; });
   await A.page.evaluate(() => { (window as any).__kk.autopilot = null; });
   const keys: Record<string, string> = { L: 'ArrowLeft', R: 'ArrowRight', U: 'ArrowUp', D: 'ArrowDown' };
-  for (let i = 0; i < 120; i++) {
+  const t0 = Date.now();
+  let inShop = false;
+  while (!inShop && Date.now() - t0 < 60_000) {
     const s = (await state(B.page))!;
-    if (!s.me) break;
+    if (!s.me) { await B.page.waitForTimeout(200); continue; }
     const dx = 640 - s.me.x, dz = 4 - s.me.z;
-    if (Math.abs(dx) < 12 && Math.abs(dz) < 6) break;
+    if (Math.abs(dx) < 14 && Math.abs(dz) < 8 && ['idle', 'walk', 'run'].includes(s.me.st)) {
+      await B.page.keyboard.press('KeyL');
+      inShop = await B.page.waitForSelector('#shop.show', { timeout: 2_000 }).then(() => true, () => false);
+      continue;
+    }
     const hold: string[] = [];
-    if (Math.abs(dx) >= 12) hold.push(dx > 0 ? keys.R : keys.L);
+    if (Math.abs(dx) >= 10) hold.push(dx > 0 ? keys.R : keys.L);
     if (Math.abs(dz) >= 6) hold.push(dz > 0 ? keys.D : keys.U);
     for (const k of hold) await B.page.keyboard.down(k);
-    await B.page.waitForTimeout(120);
+    await B.page.waitForTimeout(Math.abs(dx) > 60 ? 250 : 90);
     for (const k of hold) await B.page.keyboard.up(k);
   }
-  await B.page.keyboard.press('KeyL');
-  await B.page.waitForSelector('#shop.show', { timeout: 10_000 });
+  expect(inShop, 'guest reached the shop: ' + JSON.stringify(await state(B.page))).toBe(true);
   const before = (await state(B.page))!;
   const myPid = await B.page.evaluate(() => (window as any).__kk.client.myId as string);
   const mine = before.players.find((p) => p.pid === myPid)!;

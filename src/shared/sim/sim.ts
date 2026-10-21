@@ -34,6 +34,7 @@ export class Sim {
   section = 0;
   camX = 0;
   lockX: number | null = null;
+  camMin = 0;
   waveIdx = 0;
   waveAlive = new Set<number>();
   spawnQ: SpawnQ[] = [];
@@ -180,7 +181,7 @@ export class Sim {
       for (const p of [...this.players(), ...this.away.values()]) p.money = convert(p.money, prevCur, this.currency);
       this.emit({ k: 'convert', rate: TRY_PER_USD });
     }
-    this.camX = 0; this.lockX = null; this.waveIdx = 0; this.waveAlive.clear(); this.spawnQ = [];
+    this.camX = 0; this.camMin = 0; this.lockX = null; this.waveIdx = 0; this.waveAlive.clear(); this.spawnQ = [];
     this.ents = this.ents.filter((e) => e.kind === 'p');
     this.pickups = []; this.projs = [];
     this.props = def.props.map((pd) => ({ id: this.nextId++, kind: pd.kind, x: pd.x, z: pd.z, hp: PROP_HP[pd.kind] ?? 2, broken: false, drop: pd.drop, brokeT: 0 }));
@@ -223,6 +224,7 @@ export class Sim {
       const w = def.waves[this.waveIdx];
       this.lockX = w.at;
       this.camX = w.at;
+      this.camMin = w.at;
       w.spawn.forEach((s, i) => this.spawnQ.push({ e: s.e, side: s.side ?? 'R', z: s.z ?? 8 + this.rng.int(0, STREET_DEPTH - 16), t: i * 26 + (s.delay ?? 0), wave: this.waveIdx }));
       this.waveIdx++;
       this.emit({ k: 'wave' });
@@ -266,12 +268,15 @@ export class Sim {
       this.camX += Math.max(-3, Math.min(3, want - this.camX));
       return;
     }
-    const want = (minX + maxX) / 2 - SCREEN_W / 2 + 30;
-    // the camera only scrolls forward, never past the lock, and never so far that the
-    // rearmost player would fall off the left edge
-    const limit = Math.min(this.camMax, minX - 16);
-    if (want > this.camX) this.camX = Math.min(Math.max(this.camX, want), Math.max(this.camX, limit));
-    this.camX = Math.max(0, this.camX);
+    // Streets scroll both ways inside the area already cleared (so a shop you walked past
+    // is still reachable), never left of the last wave's lock point, never right of the next
+    // wave or the section end, and always keep every live player in frame.
+    const want = (minX + maxX) / 2 - SCREEN_W / 2 + 24;
+    const lo = maxX + BODY_HALF_W + 2 - SCREEN_W, hi = minX - BODY_HALF_W - 2;
+    let target = lo <= hi ? Math.max(lo, Math.min(hi, want)) : want;
+    target = Math.max(this.camMin, Math.min(this.camMax, target)); // locks are absolute
+    this.camX += Math.max(-3.5, Math.min(3.5, target - this.camX));
+    this.camX = Math.max(this.camMin, Math.min(Math.max(this.camMin, this.camMax), Math.max(0, this.camX)));
   }
 
   private updateHazards(): void {
