@@ -11,7 +11,8 @@ with **online co-op multiplayer**. It's inspired mechanically by River City Rans
 - Title: **Kanka Kombat: Nutella Nights**, by XiØN / XiONDiGiTaL (https://xiondigital.net).
   Title, repo name and route must stay configurable (`src/shared/config/branding.ts`).
 - Target URL: https://xiondigital.net/kankakombat
-- Repo: https://github.com/XiONDiGiTaL/KankaKombat. Work branch: `claude/awesome-fermi-dd4yzn`.
+- Repo: https://github.com/XiONDiGiTaL/kankakombat (was `KankaKombat`; the lowercase name is what makes the
+  public Pages path /kankakombat/, since GitHub Pages project paths are case-sensitive).
 - Architecture reference: https://github.com/XiONDiGiTaL/leapbuddies. Never modify that repo.
 - **NEVER commit the River City Ransom ROM** or any extracted proprietary asset. `.gitignore` blocks
   `*.gba *.nes *.sfc *.smc *.zip`.

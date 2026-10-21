@@ -5,7 +5,7 @@ export const BRANDING = {
   developer: 'XiØN / XiONDiGiTaL',
   website: 'https://xiondigital.net',
   playUrl: 'https://xiondigital.net/kankakombat/',
-  repoUrl: 'https://github.com/XiONDiGiTaL/KankaKombat',
+  repoUrl: 'https://github.com/XiONDiGiTaL/kankakombat',
   storagePrefix: 'kankakombat',
   roomPrefix: 'kk1-',
 } as const;

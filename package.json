@@ -4,7 +4,7 @@
   "private": true,
   "description": "Kanka Kombat: Nutella Nights - an online co-op pixel-art beat-'em-up for the browser",
   "homepage": "https://xiondigital.net/kankakombat/",
-  "repository": { "type": "git", "url": "https://github.com/XiONDiGiTaL/KankaKombat.git" },
+  "repository": { "type": "git", "url": "https://github.com/XiONDiGiTaL/kankakombat.git" },
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
