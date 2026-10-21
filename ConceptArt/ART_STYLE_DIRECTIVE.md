@@ -84,12 +84,7 @@ pickups join this sheet's style: same pixel density, dark outlines, sparkle.
 | `enemy_dondurma_man_sheet.png` | **The Dondurma Man** (İstanbul) | Red embroidered vest, white shirt, red fez, handlebar moustache. Weapon: his dondurma on its long metal stick — thrust and twirl attacks. Trickster energy. |
 | `enemy_nyc_bum_sheet.png` | **NYC Bum** (New York) | Grey beanie, scruffy beard, torn olive overcoat over plaid, patched pants, fingerless glove. Wild haymaker punches, scrappy brawler. |
 | `enemy_tampa_man_sheet.png` | **The Tampa Man** (Tampa) | Elderly: bald + wispy white side hair, glasses, pastel polo, khaki shorts, socks with sandals. Weapon: wooden cane — overhead swing + poke. Shuffling walk, determined. |
-
-**Planned, art pending — Bıyıklı Fehmi (İstanbul):** fez, handlebar
-moustache, waistcoat, strong opinions about tea. Behaviour is part of his
-design: he sips his tea at every turn, so he always stands still for a
-moment before setting off again — draw a tea-sipping idle pose into his
-sheet when it is made, and preserve the pause in his animation timing.
+| `enemy_biyikli_fehmi_sheet.png` | **Bıyıklı Fehmi** (İstanbul) | Red fez, huge handlebar moustache, dark waistcoat over white shirt. Never puts down his tea glass (ince belli on its saucer) — it stays in his hand in every frame, punch included. Behaviour is part of his design: he sips his tea at every turn, so he always stands still for a moment before setting off again — the tea-sipping idle pose is on his sheet; preserve the pause in his animation timing. |
 
 ## Rights / compliance
 
