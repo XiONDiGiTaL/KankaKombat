@@ -69,6 +69,28 @@ These sheets are *concept* references. When producing game-ready assets:
   proportions, palette discipline, and outline weight so the whole cast
   looks like one game.
 
+## Pickup items (`pickup_items_sheet.png`)
+
+Food pickups, drawn big and readable at gameplay size with a pixel sparkle —
+the health/energy currency of the game. Locked set: **Lahmacun** (flat +
+rolled), **Ayran** (sealed cup), **Nutella** (jar), **Bananas** (bunch),
+**Baklava** (tray, pistachio top), **Sujuk** (horseshoe sausage ring). New
+pickups join this sheet's style: same pixel density, dark outlines, sparkle.
+
+## Enemies (same sheet layout as the heroes)
+
+| File | Enemy | Design / behaviour notes |
+|---|---|---|
+| `enemy_dondurma_man_sheet.png` | **The Dondurma Man** (İstanbul) | Red embroidered vest, white shirt, red fez, handlebar moustache. Weapon: his dondurma on its long metal stick — thrust and twirl attacks. Trickster energy. |
+| `enemy_nyc_bum_sheet.png` | **NYC Bum** (New York) | Grey beanie, scruffy beard, torn olive overcoat over plaid, patched pants, fingerless glove. Wild haymaker punches, scrappy brawler. |
+| `enemy_tampa_man_sheet.png` | **The Tampa Man** (Tampa) | Elderly: bald + wispy white side hair, glasses, pastel polo, khaki shorts, socks with sandals. Weapon: wooden cane — overhead swing + poke. Shuffling walk, determined. |
+
+**Planned, art pending — Bıyıklı Fehmi (İstanbul):** fez, handlebar
+moustache, waistcoat, strong opinions about tea. Behaviour is part of his
+design: he sips his tea at every turn, so he always stands still for a
+moment before setting off again — draw a tea-sipping idle pose into his
+sheet when it is made, and preserve the pause in his animation timing.
+
 ## Rights / compliance
 
 - All KankaKombat art is original work for this project. Do not copy,
