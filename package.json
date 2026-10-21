@@ -1,0 +1,37 @@
+{
+  "name": "kankakombat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kanka Kombat: Nutella Nights - an online co-op pixel-art beat-'em-up for the browser",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run sprites && tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview --port 4173",
+    "server": "tsx src/server/index.ts",
+    "sprites": "tsx tools/sprites/build.ts",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^22.9.0",
+    "@types/pngjs": "^6.0.5",
+    "@types/ws": "^8.5.13",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "@fontsource/press-start-2p": "^5.1.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "ws": "^8.18.0"
+  }
+}
