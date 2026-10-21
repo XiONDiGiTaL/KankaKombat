@@ -100,6 +100,48 @@ never smooth gradients.
 | `stage_istanbul.png` | **Istanbul** | Vibrant morning. Cobblestone embankment, Bosphorus + ferry, Galata Tower, domes and minarets, seagulls, market stalls, tea garden. |
 | `stage_tampa.png` | **Tampa** | Relaxed sunny afternoon. Boardwalk fighting plane, pastel beach houses, lifeguard tower, taco truck, palms, pier in the distance, Bayshore Dr sign. |
 
+## UI, lettering & HUD
+
+- `ui_hud_kit.png` — health bar (full / half / low / empty) + wider boss
+  bar, portrait box cutouts (gold / silver / red frames), score HUD
+  (SCORE, HI-SCORE, 1UP, CREDIT, stage-name banner), the **GO ==>** sign in
+  lit and dim blink states, GAME OVER + CONTINUE? countdown treatment.
+- `font_lettering_sheet.png` — the game's bitmap font source. TITLE FONT
+  (chunky yellow arcade) for headers, prices and signage; HUD FONT (small
+  white) for body text and numbers. The Turkish glyphs (Ç Ğ İ Ö Ş Ü) are
+  mandatory — character and place names need them (Bıyıklı Fehmi, İzmir).
+  No system/default fonts anywhere in the game's UI, ever.
+
+## Destructibles (`destructibles_sheet.png`)
+
+Street props are breakable and pay out food. Every destructible has three
+art states — **intact / damaged / smashed** — and the game swaps them as
+the object takes hits: metal trash can, wooden crate, cardboard box,
+wooden barrel, street mailbox. On the final hit the object bursts (debris +
+sparkle) and pops a food pickup from `pickup_items_sheet.png` into a
+little arc. Props sit on the fighting plane and can be broken by player
+and enemy attacks alike.
+
+## Shops (`shop_interior_ui.png`)
+
+River City Ransom pattern: the heroes are **visibly standing inside the
+store** in front of the counter, shopkeeper NPC behind it, and the buy
+menu is a foreground cream panel (item list + prices, cursor, MONEY
+readout) over the scene. Rules:
+
+- Every stage themes its shop to its location — NY bodega, İzmir
+  bakkal/pastane, Istanbul bazaar shop, Tampa beach/taco spot — reusing
+  the same menu panel and font.
+- Shops are reached through enterable storefronts on the stage maps
+  (marked door + sign in the title font), or, where an interior is too
+  heavy, a street vendor NPC with a booth stand on the street who opens
+  the same menu as an overlay.
+- Buying is instant-use or carry-one-item; the player cannot be attacked
+  inside a shop; exiting returns them to the exact spot outside the door.
+- Prices on the concept (Lahmacun 50, Ayran 30, Bananas 40, Baklava 80,
+  Sujuk 90, Nutella 150) set the food economy: price tracks heal value,
+  Nutella is the rare full restore.
+
 ## Rights / compliance
 
 - All KankaKombat art is original work for this project. Do not copy,
