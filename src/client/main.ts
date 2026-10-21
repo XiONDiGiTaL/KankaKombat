@@ -47,8 +47,10 @@ const AUTOPILOT = params.get('autopilot') === '1';
 const ENV = import.meta.env as Record<string, string | undefined>;
 const WS_URL = params.get('server') ?? ENV.VITE_WS_URL ?? '';
 const RELAY_URL = params.get('relay') ?? ENV.VITE_RELAY_URL ?? '';
-const SB_URL = ENV.VITE_SUPABASE_URL ?? 'https://ezwxppiuxbyzmmheckce.supabase.co';
-const SB_KEY = ENV.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6d3hwcGl1eGJ5em1taGVja2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3MjE4MjEsImV4cCI6MjEwMzI5NzgyMX0.fh6AUpeKPDlm4Tr2xXwhf0VdKsRv1A1bZ2s4WFPDMaE';
+// `||`, not `??`: a build with these defined but empty (CI vars that are not configured) must
+// still fall back to the public relay rather than hand createClient an empty URL.
+const SB_URL = ENV.VITE_SUPABASE_URL || 'https://ezwxppiuxbyzmmheckce.supabase.co';
+const SB_KEY = ENV.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6d3hwcGl1eGJ5em1taGVja2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3MjE4MjEsImV4cCI6MjEwMzI5NzgyMX0.fh6AUpeKPDlm4Tr2xXwhf0VdKsRv1A1bZ2s4WFPDMaE';
 const netMode = WS_URL ? 'server' : RELAY_URL ? 'relay-ws' : 'relay-supabase';
 
 type ScreenId = 'loading' | 'title' | 'menu' | 'select' | 'lobby' | 'howto' | 'settings' | 'credits' | 'pause' | 'shop' | 'ended' | 'none';
