@@ -17,6 +17,7 @@ export function aiTick(sim: Sim, e: Ent): void {
   if (e.hp <= 0) { updateCombat(sim, e); return; }
   if (e.boss) checkPhase(sim, e, def);
   if (e.st === 'block') {
+    e.vx *= 0.75; e.vz = 0;
     if (--ai.blockT <= 0) setState(e, 'idle');
     return;
   }

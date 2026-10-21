@@ -260,6 +260,12 @@ export class Sim {
     const ps = this.livePlayers();
     if (!ps.length) return;
     const minX = Math.min(...ps.map((p) => p.x)), maxX = Math.max(...ps.map((p) => p.x));
+    if (this.sectionDef.boss) {
+      // boss arenas: a free camera that follows the players both ways inside the arena
+      const want = Math.max(0, Math.min(this.sectionDef.length - SCREEN_W, (minX + maxX) / 2 - SCREEN_W / 2));
+      this.camX += Math.max(-3, Math.min(3, want - this.camX));
+      return;
+    }
     const want = (minX + maxX) / 2 - SCREEN_W / 2 + 30;
     // the camera only scrolls forward, never past the lock, and never so far that the
     // rearmost player would fall off the left edge
@@ -311,6 +317,7 @@ export class Sim {
     e.z = Math.max(0, Math.min(STREET_DEPTH, e.z));
     const def = this.sectionDef;
     if (e.kind === 'p') e.x = Math.max(this.camX + BODY_HALF_W + 2, Math.min(this.camX + SCREEN_W - BODY_HALF_W - 2, e.x));
+    else if (def.boss) e.x = Math.max(14, Math.min(def.length - 14, e.x));
     else e.x = Math.max(-80, Math.min(def.length + 80, e.x));
     if (e.st === 'thrown') e.x = Math.max(this.camX + 4, Math.min(this.camX + SCREEN_W - 4, e.x));
     // solid props
@@ -439,7 +446,7 @@ export class Sim {
     updatePickups(this);
     for (const pr of this.props) if (pr.broken) pr.brokeT++;
     if (this.phase === 'play') { this.updateWaves(); this.updateHazards(); this.updateCamera(); this.checkExit(); }
-    else if (this.phase === 'boss') this.checkBoss();
+    else if (this.phase === 'boss') { this.checkBoss(); this.updateCamera(); }
     else if (this.phase === 'intro') this.updateCamera();
     if (this.players().length > 0 && this.players().every((p) => p.st === 'out')) {
       this.phase = 'gameover'; this.phaseT = 0; this.continueT = CONTINUE_TICKS;
@@ -460,6 +467,15 @@ export class Sim {
     const b = this.byId(this.bossId);
     if (!b || b.hp <= 0) {
       for (const e of this.enemies()) if (e.hp > 0) { e.hp = 0; this.reward(e); setState(e, 'knock'); e.vy = 3; e.vx = 2 * e.face * -1; }
+      // the boss's purse (and any loose coins) is split evenly between the surviving players
+      const coins = this.pickups.filter((p) => p.kind === 'coin' && !p.taken);
+      const total = coins.reduce((n, c) => n + c.amount, 0);
+      const winners = this.livePlayers().length ? this.livePlayers() : this.players();
+      if (total > 0 && winners.length) {
+        coins.forEach((c) => (c.taken = true));
+        const share = Math.floor(total / winners.length);
+        winners.forEach((p, i) => { const amt = share + (i === 0 ? total - share * winners.length : 0); p.money += amt; this.emit({ k: 'coin', id: p.id, amt }); });
+      }
       this.phase = 'bossdown'; this.phaseT = 0;
     }
   }

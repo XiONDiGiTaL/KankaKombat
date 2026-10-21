@@ -28,6 +28,7 @@ export class Bot {
   private evadeT = 0;
   private evadeDir = 0;
   private propT = 0;
+  private skip = new Set<number>();
   constructor(public pid: string, private seed = 1) {}
 
   think(sim: Sim): InputFrame {
@@ -88,6 +89,8 @@ export class Bot {
     }
 
     const target = this.pickTarget(sim, me);
+    const offscreen = !target && sim.enemies().find((e) => e.hp > 0);
+    if (offscreen) return this.toward(me, offscreen.x, offscreen.z);
     if (!target) {
       // collect coins, then head for the exit
       const coin = sim.pickups.find((p) => p.kind === 'coin' && Math.abs(p.x - me.x) < 140 && this.visible(sim, p.x));
@@ -97,13 +100,16 @@ export class Bot {
         if (food) { if (Math.abs(food.x - me.x) < 10 && Math.abs(food.z - me.z) < 6) return this.tap(BTN.GRAB, 4); return this.toward(me, food.x, food.z); }
       }
       // smash props for drops
-      const prop = this.propT < 300 ? sim.props.find((p) => !p.broken && Math.abs(p.x - me.x) < 120 && p.x > sim.camX + 30) : undefined;
+      const prop = sim.props.find((p) => !p.broken && Math.abs(p.x - me.x) < 120 && p.x > sim.camX + 30 && !this.skip.has(p.x * 1000 + p.z));
       if (prop) {
-        this.propT++;
-        const fromLeft = prop.x - 24 > sim.camX + 14;
+        if (++this.propT > 300) { this.skip.add(prop.x * 1000 + prop.z); this.propT = 0; }
+        const leftOk = prop.x - 24 > sim.camX + 14;
+        const fromLeft = leftOk && (me.x < prop.x || prop.x + 24 > sim.camX + 370);
         const wx = fromLeft ? prop.x - 24 : prop.x + 24;
         const want = fromLeft ? 1 : -1;
         if (Math.abs(me.x - wx) < 6 && Math.abs(me.z - prop.z) < 4) return me.face === want ? this.tap(BTN.LIGHT, 5) : want === 1 ? BTN.RIGHT : BTN.LEFT;
+        // go around the prop in depth first if it is between us and the spot
+        if ((prop.x - me.x) * (wx - me.x) > 0 && Math.abs(me.z - prop.z) < 12 && Math.abs(me.x - prop.x) < 30) return me.z > prop.z ? BTN.DOWN : BTN.UP;
         return this.toward(me, wx, prop.z);
       }
       this.propT = 0;

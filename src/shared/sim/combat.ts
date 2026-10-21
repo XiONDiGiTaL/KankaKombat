@@ -156,7 +156,7 @@ function detectHits(sim: Sim, e: Ent, a: AttackDef): void {
   let wall = Infinity;
   for (const pr of sim.props) {
     if (pr.broken || Math.abs(pr.z - e.z) > a.dz + 6) continue;
-    if (pr.x + 12 < b.x0 || pr.x - 12 > b.x1 || b.y0 > 22) continue;
+    if (pr.x + 12 < b.x0 || pr.x - 12 > b.x1 || b.y0 > 30) continue;
     wall = Math.min(wall, Math.abs(pr.x - e.x));
     if (e.kind === 'p' && !e.hitList.includes(-pr.id)) { e.hitList.push(-pr.id); breakProp(sim, pr, 1); }
   }
