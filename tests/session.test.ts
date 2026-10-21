@@ -130,7 +130,7 @@ describe('room session', () => {
     expect(allKos.length).toBe(1);
     expect(['bossdown', 'chapterclear']).toContain(sim.phase);
     const gained = sim.players().reduce((n, p) => n + p.money, 0) - totalBefore;
-    expect(gained).toBe(300); // Kemal's purse, exactly once, split between both
+    expect(gained).toBe(120); // the boss purse, exactly once, split between both
     void kos;
   });
 });

@@ -7,7 +7,7 @@ import { InputFrame, NO_INPUT } from '../data/input';
 import { CHAPTERS, ChapterDef, PROP_HP, SectionDef } from '../data/stages';
 import { ENEMIES } from '../data/enemies';
 import { FIGHTERS, FighterId } from '../data/fighters';
-import { TRY_PER_USD, convert, Currency } from '../data/currency';
+import { Currency } from '../data/currency';
 import { Rng } from './rng';
 import { Ent, GamePhase, HazardRt, Pickup, Projectile, Prop, SimEvent } from './types';
 import { controlPlayer } from './control';
@@ -173,14 +173,9 @@ export class Sim {
   }
 
   loadSection(ch: number, se: number): void {
-    const prevCur = this.currency;
     this.chapter = ch; this.section = se;
     const def = this.sectionDef;
     this.currency = this.chapterDef.currency;
-    if (prevCur !== this.currency) {
-      for (const p of [...this.players(), ...this.away.values()]) p.money = convert(p.money, prevCur, this.currency);
-      this.emit({ k: 'convert', rate: TRY_PER_USD });
-    }
     this.camX = 0; this.camMin = 0; this.lockX = null; this.waveIdx = 0; this.waveAlive.clear(); this.spawnQ = [];
     this.ents = this.ents.filter((e) => e.kind === 'p');
     this.pickups = []; this.projs = [];

@@ -67,8 +67,33 @@ export const ATTACKS: Record<string, AttackDef> = {
   e_throw_orange: A({ anim: 'throwobj', startup: 18, active: 2, recovery: 20, damage: 0, box: [0, 0, 0, 0], dz: 0, kb: [0, 0], hitstun: 0, projectile: 'orange' }),
   e_dashkick: A({ anim: 'runatk', startup: 10, active: 14, recovery: 14, damage: 8, box: [0, 28, 6, 34], dz: 8, kb: [3.0, 2.0], hitstun: 20, knockdown: true, lunge: 3.2, telegraph: 6 }),
 
-  // ------------------------------------------------------------- Rıza Dondurmacı
-  riza_belly: A({ anim: 'belly', startup: 10, active: 26, recovery: 24, damage: 12, box: [0, 26, 10, 40], dz: 10, kb: [4.4, 2.2], hitstun: 24, knockdown: true, hitstop: 7, heavy: true, lunge: 3.4, armor: true, telegraph: 26 }),
+  // ------------------------------------------------------------- concept roster
+  // The Dondurma Man: long metal stick — a committed thrust and a wide twirl.
+  dondurma_thrust: A({ anim: 'thrust', startup: 14, active: 5, recovery: 18, damage: 10, box: [10, 48, 22, 44], dz: 7, kb: [2.8, 0.4], hitstun: 20, heavy: true, lunge: 1.2, telegraph: 6 }),
+  dondurma_twirl: A({ anim: 'twirl', startup: 10, active: 18, recovery: 22, damage: 8, box: [-26, 40, 18, 48], dz: 10, kb: [3.2, 2.0], hitstun: 22, knockdown: true, hits: 2, heavy: true, telegraph: 10 }),
+  dondurma_swat: A({ anim: 'slap', startup: 10, active: 4, recovery: 14, damage: 6, box: [4, 28, 24, 42], dz: 8, kb: [1.8, 0], hitstun: 18 }),
+
+  // NYC Bum: wild haymaker that swings past the guard.
+  bum_haymaker: A({ anim: 'haymaker', startup: 18, active: 6, recovery: 20, damage: 12, box: [2, 34, 20, 46], dz: 9, kb: [4.2, 1.8], hitstun: 24, knockdown: true, heavy: true, telegraph: 8, guardBreak: true }),
+
+  // Tampa Man: overhead cane swing and a flat poke.
+  tampa_cane: A({ anim: 'cane', startup: 20, active: 6, recovery: 20, damage: 12, box: [4, 38, 14, 50], dz: 9, kb: [3.8, 2.0], hitstun: 24, knockdown: true, heavy: true, telegraph: 8 }),
+  tampa_poke: A({ anim: 'poke', startup: 14, active: 6, recovery: 16, damage: 8, box: [10, 44, 20, 38], dz: 7, kb: [2.4, 0.4], hitstun: 20 }),
+
+  // Bıyıklı Fehmi: backhand with the tea hand still raised, and a tea-fuelled charge.
+  fehmi_slap: A({ anim: 'slap', startup: 12, active: 4, recovery: 16, damage: 7, box: [4, 28, 24, 44], dz: 8, kb: [2.2, 0], hitstun: 20 }),
+  fehmi_backhand: A({ anim: 'haymaker', startup: 16, active: 5, recovery: 22, damage: 11, box: [2, 32, 22, 46], dz: 9, kb: [4.0, 1.6], hitstun: 24, knockdown: true, heavy: true, telegraph: 8 }),
+  fehmi_charge: A({ anim: 'charge', startup: 10, active: 30, recovery: 34, damage: 13, box: [0, 26, 8, 46], dz: 10, kb: [4.8, 2.2], hitstun: 26, knockdown: true, heavy: true, lunge: 2.2, armor: true, telegraph: 24 }),
+
+  // ------------------------------------------------------------- bosses
+  bum_boss_slam: A({ anim: 'heavy', startup: 18, active: 6, recovery: 24, damage: 16, box: [2, 34, 0, 46], dz: 10, kb: [4.0, 3.0], hitstun: 28, knockdown: true, heavy: true, armor: true, telegraph: 10 }),
+  dondurma_boss_twirl: A({ anim: 'twirl', startup: 8, active: 22, recovery: 24, damage: 10, box: [-30, 44, 18, 50], dz: 12, kb: [3.6, 2.2], hitstun: 24, knockdown: true, hits: 3, heavy: true, telegraph: 12 }),
+  fehmi_boss_slam: A({ anim: 'heavy', startup: 16, active: 6, recovery: 26, damage: 17, box: [2, 34, 18, 48], dz: 10, kb: [4.4, 2.8], hitstun: 28, knockdown: true, heavy: true, armor: true, telegraph: 12 }),
+  tampa_boss_sweep: A({ anim: 'cane', startup: 16, active: 10, recovery: 28, damage: 15, box: [-10, 44, 0, 34], dz: 12, kb: [4.2, 2.4], hitstun: 26, knockdown: true, heavy: true, shockwave: true, telegraph: 14 }),
+
+  // ------------------------------------------------------------- legacy moves (kept for data compatibility)
+  // Rıza Dondurmacı
+  riza_belly_legacy: A({ anim: 'belly', startup: 10, active: 26, recovery: 24, damage: 12, box: [0, 26, 10, 40], dz: 10, kb: [4.4, 2.2], hitstun: 24, knockdown: true, hitstop: 7, heavy: true, lunge: 3.4, armor: true, telegraph: 26 }),
   riza_slap: A({ anim: 'slap', startup: 9, active: 4, recovery: 14, damage: 7, box: [4, 26, 22, 42], dz: 8, kb: [2.4, 0], hitstun: 20, hitstop: 5 }),
   riza_cone: A({ anim: 'cone', startup: 24, active: 4, recovery: 12, damage: 9, box: [4, 30, 24, 44], dz: 8, kb: [2.0, 1.0], hitstun: 22, stun: 20 }),
 

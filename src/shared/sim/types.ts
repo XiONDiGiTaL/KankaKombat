@@ -20,6 +20,7 @@ export interface AiState {
   side: number;
   circleZ: number;
   blockT: number;
+  sipT?: number;
 }
 
 export interface Ent {
@@ -83,7 +84,8 @@ export type SimEvent =
   | { k: 'throw'; id: number }
   | { k: 'land'; id: number; heavy: boolean }
   | { k: 'jump'; id: number }
-  | { k: 'break'; x: number; z: number }
+  | { k: 'break'; x: number; z: number; id?: number }
+  | { k: 'prophit'; id: number; x: number; z: number; hp: number }
   | { k: 'quip'; id: number; text: string }
   | { k: 'phase'; id: number; text: string }
   | { k: 'levelup'; id: number; lvl: number }

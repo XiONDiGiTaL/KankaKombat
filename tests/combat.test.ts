@@ -2,13 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { arena, enemy, run, press, until, BTN } from './helpers';
 import { ATTACKS } from '../src/shared/data/attacks';
 import { hittable } from '../src/shared/sim/combat';
+import { PROP_HP } from '../src/shared/data/stages';
 
 describe('combat', () => {
   it('light attack hits an enemy in front but not one behind or in another lane', () => {
     const { sim, ps: [p] } = arena();
-    const front = enemy(sim, 'abi', p.x + 18, p.z);
-    const behind = enemy(sim, 'abi', p.x - 18, p.z);
-    const lane = enemy(sim, 'abi', p.x + 18, p.z + 30);
+    const front = enemy(sim, 'bum', p.x + 18, p.z);
+    const behind = enemy(sim, 'bum', p.x - 18, p.z);
+    const lane = enemy(sim, 'bum', p.x + 18, p.z + 30);
     const hp = front.hp;
     press(sim, 'p0', BTN.LIGHT);
     run(sim, 10);
@@ -20,7 +21,7 @@ describe('combat', () => {
 
   it('chains B.T.\'s four-hit combo and the finisher knocks down', () => {
     const { sim, ps: [p] } = arena();
-    const e = enemy(sim, 'kazim', p.x + 20, p.z);
+    const e = enemy(sim, 'dondurma', p.x + 20, p.z);
     e.hp = e.maxHp = 500;
     const seen = new Set<string>();
     for (let i = 0; i < 80; i++) {
@@ -35,7 +36,7 @@ describe('combat', () => {
 
   it('heavy attack knocks down; the target always gets back up', () => {
     const { sim, ps: [p] } = arena(['sc']);
-    const e = enemy(sim, 'abi', p.x + 20, p.z);
+    const e = enemy(sim, 'bum', p.x + 20, p.z);
     e.hp = e.maxHp = 200;
     press(sim, 'p0', BTN.HEAVY);
     until(sim, () => e.st === 'knock', 40);
@@ -47,7 +48,7 @@ describe('combat', () => {
 
   it('blocking takes chip damage only; S.C.\'s haymaker breaks guard', () => {
     const { sim, ps: [p] } = arena(['sc']);
-    const e = enemy(sim, 'gokhan', p.x + 20, p.z);
+    const e = enemy(sim, 'fehmi', p.x + 20, p.z);
     e.hp = e.maxHp = 300;
     e.st = 'block'; e.ai!.blockT = 999; e.face = -1;
     press(sim, 'p0', BTN.LIGHT);
@@ -64,12 +65,12 @@ describe('combat', () => {
 
   it('grab checks range and facing, holds, knees and releases on the third knee', () => {
     const { sim, ps: [p] } = arena();
-    const far = enemy(sim, 'abi', p.x + 60, p.z);
+    const far = enemy(sim, 'bum', p.x + 60, p.z);
     press(sim, 'p0', BTN.GRAB);
     expect(p.st).toBe('grab'); // whiff
     expect(far.heldBy).toBe(-1);
     run(sim, 20);
-    const e = enemy(sim, 'abi', p.x - 18, p.z);
+    const e = enemy(sim, 'bum', p.x - 18, p.z);
     press(sim, 'p0', BTN.GRAB); // facing the wrong way
     expect(e.heldBy).toBe(-1);
     run(sim, 20);
@@ -89,9 +90,9 @@ describe('combat', () => {
 
   it('throw releases the victim, deals landing damage and bowls over others', () => {
     const { sim, ps: [p] } = arena(['sc']);
-    const e = enemy(sim, 'abi', p.x + 18, p.z);
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
     e.hp = e.maxHp = 200;
-    const victim = enemy(sim, 'abi', p.x + 70, p.z);
+    const victim = enemy(sim, 'bum', p.x + 70, p.z);
     victim.hp = victim.maxHp = 200;
     press(sim, 'p0', BTN.GRAB);
     expect(p.st).toBe('hold');
@@ -105,7 +106,7 @@ describe('combat', () => {
 
   it('a grabbed enemy breaks free when the hold times out', () => {
     const { sim, ps: [p] } = arena();
-    const e = enemy(sim, 'abi', p.x + 18, p.z);
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
     press(sim, 'p0', BTN.GRAB);
     expect(e.st).toBe('held');
     run(sim, 130);
@@ -116,7 +117,7 @@ describe('combat', () => {
 
   it('bosses cannot be grabbed unless dizzy or tired', () => {
     const { sim, ps: [p] } = arena(['sc']);
-    const b = enemy(sim, 'kemal', p.x + 18, p.z);
+    const b = enemy(sim, 'bum_boss', p.x + 18, p.z);
     press(sim, 'p0', BTN.GRAB);
     expect(b.heldBy).toBe(-1);
     run(sim, 20);
@@ -127,7 +128,7 @@ describe('combat', () => {
 
   it('juggles are capped so a combo cannot loop forever', () => {
     const { sim, ps: [p] } = arena();
-    const e = enemy(sim, 'abi', p.x + 18, p.z);
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
     e.hp = e.maxHp = 9999;
     e.st = 'knock'; e.y = 30; e.vy = 0;
     // keep hitting an airborne target: after the juggle limit it can no longer be hit
@@ -147,7 +148,7 @@ describe('combat', () => {
 
   it('a defeated enemy rewards exactly once', () => {
     const { sim, ps: [p] } = arena();
-    const e = enemy(sim, 'abi', p.x + 18, p.z);
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
     e.hp = 1;
     press(sim, 'p0', BTN.LIGHT);
     run(sim, 8);
@@ -163,11 +164,11 @@ describe('combat', () => {
 
   it('attacks do not pass through solid props, which break and drop loot', () => {
     const { sim, ps: [p] } = arena();
-    sim.props.push({ id: 900, kind: 'crate', x: p.x + 20, z: p.z, hp: 2, broken: false, drop: 'lahmacun', brokeT: 0 });
-    const e = enemy(sim, 'abi', p.x + 28, p.z);
+    sim.props.push({ id: 900, kind: 'crate', x: p.x + 20, z: p.z, hp: PROP_HP.crate, broken: false, drop: 'lahmacun', brokeT: 0 });
+    const e = enemy(sim, 'bum', p.x + 28, p.z);
     press(sim, 'p0', BTN.LIGHT); run(sim, 12);
     expect(e.hp).toBe(e.maxHp);
-    press(sim, 'p0', BTN.LIGHT); run(sim, 20);
+    for (let i = 0; i < PROP_HP.crate; i++) { press(sim, 'p0', BTN.LIGHT); run(sim, 20); }
     expect(sim.props[0].broken).toBe(true);
     expect(sim.pickups.some((x) => x.item === 'lahmacun')).toBe(true);
   });

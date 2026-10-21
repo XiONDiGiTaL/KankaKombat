@@ -1,5 +1,5 @@
-// Enemy and boss roster. Behaviour is data: the AI reads ranges, weights and chances
-// from here, and bosses add phases with their own move lists and speed.
+// Enemy and boss roster — the four approved concept characters, one per city, plus
+// their boss-grade champion. Behaviour is data: AI reads ranges, weights and chances.
 
 export interface EnemyAttack { id: string; w: number; min: number; max: number }
 export interface BossPhase { below: number; attacks: EnemyAttack[]; speed: number; aggression: number; summon?: string[]; line?: string }
@@ -15,13 +15,15 @@ export interface EnemyDef {
   block: number;             // chance to block a telegraphed player attack
   dodge: number;             // chance to sidestep instead
   poise: number;             // light hits absorbed before flinching (0 = always flinch)
-  reward: [number, number];  // currency drop range (local units)
+  reward: [number, number];  // cash drop range
   food: number;              // chance to drop food
   xp: number;
   weight: number;            // throw distance divisor
-  flank?: boolean;           // prefers attacking from behind
-  keepAway?: number;         // ranged enemies hold this distance
+  flank?: boolean;
+  keepAway?: number;
   slowGetup?: boolean;
+  /** Bıyıklı Fehmi always stops for a sip before setting off again. */
+  sip?: boolean;
   quips?: string[];
   boss?: { title: string; phases: BossPhase[]; tired: number; intro: string; defeat: string };
 }
@@ -29,67 +31,85 @@ export interface EnemyDef {
 const atk = (id: string, w: number, min: number, max: number): EnemyAttack => ({ id, w, min, max });
 
 export const ENEMIES: Record<string, EnemyDef> = {
-  // ------------------------------------------------------------- İstanbul
-  abi: { id: 'abi', name: 'Mahalle Abisi', sheet: 'abi', maxHp: 38, walk: 1.0, walkZ: 0.7, attacks: [atk('e_jab', 3, 0, 24), atk('e_punch', 2, 0, 24)], aggression: 0.45, block: 0.08, dodge: 0.04, poise: 0, reward: [10, 25], food: 0.12, xp: 12, weight: 1, quips: ['Ne bakıyon?', 'Kanka, dur bi!'] },
-  kazim: { id: 'kazim', name: 'Kebapçı Kazım', sheet: 'kazim', maxHp: 72, walk: 0.75, walkZ: 0.55, attacks: [atk('e_heavy', 3, 0, 28), atk('e_shove', 2, 0, 22)], aggression: 0.35, block: 0.15, dodge: 0, poise: 2, reward: [20, 40], food: 0.25, xp: 22, weight: 1.6, quips: ['Şiş gibi gelirim!'] },
-  selo: { id: 'selo', name: 'Sinsi Selo', sheet: 'selo', maxHp: 30, walk: 1.5, walkZ: 1.0, attacks: [atk('e_jab', 3, 0, 22), atk('e_flykick', 2, 30, 70)], aggression: 0.55, block: 0.05, dodge: 0.3, poise: 0, reward: [10, 30], food: 0.1, xp: 14, weight: 0.8, flank: true },
-  riza: { id: 'riza', name: 'Rıza Dondurmacı', sheet: 'riza', maxHp: 95, walk: 0.85, walkZ: 0.6, attacks: [atk('riza_belly', 3, 30, 90), atk('riza_slap', 3, 0, 24), atk('riza_cone', 2, 0, 28)], aggression: 0.5, block: 0.1, dodge: 0, poise: 2, reward: [40, 70], food: 0.6, xp: 40, weight: 1.8, quips: ['Dondurma? Hayır... DONDURMAAA!', 'Bu bıyık 20 yıllık!', 'Külahı al... ALAMAZSIN!'] },
-  // ------------------------------------------------------------- İzmir
-  mert: { id: 'mert', name: 'Martı Mert', sheet: 'mert', maxHp: 34, walk: 1.7, walkZ: 1.1, attacks: [atk('e_jab', 3, 0, 22), atk('e_dashkick', 2, 34, 80)], aggression: 0.5, block: 0.05, dodge: 0.35, poise: 0, reward: [12, 28], food: 0.12, xp: 16, weight: 0.8, flank: true, quips: ['Hop! Kaçtım!'] },
-  kenan: { id: 'kenan', name: 'Kumru Kenan', sheet: 'kenan', maxHp: 56, walk: 1.15, walkZ: 0.8, attacks: [atk('e_punch', 3, 0, 24), atk('e_heavy', 2, 0, 28)], aggression: 0.7, block: 0.05, dodge: 0, poise: 1, reward: [15, 35], food: 0.15, xp: 20, weight: 1.2, quips: ['Kumru yedim, güçlüyüm!'] },
-  gokhan: { id: 'gokhan', name: 'Gevrek Gökhan', sheet: 'gokhan', maxHp: 52, walk: 0.95, walkZ: 0.7, attacks: [atk('e_counter', 2, 0, 24), atk('e_punch', 2, 0, 24)], aggression: 0.35, block: 0.55, dodge: 0, poise: 1, reward: [15, 35], food: 0.15, xp: 20, weight: 1.1 },
-  leyla: { id: 'leyla', name: 'Lokma Leyla', sheet: 'leyla', maxHp: 32, walk: 1.2, walkZ: 0.9, attacks: [atk('e_throw', 4, 60, 150), atk('e_jab', 1, 0, 22)], aggression: 0.5, block: 0, dodge: 0.2, poise: 0, reward: [15, 30], food: 0.3, xp: 18, weight: 0.9, keepAway: 100, quips: ['Lokma ister misin?'] },
   // ------------------------------------------------------------- New York
-  punk: { id: 'punk', name: 'Bodega Punk', sheet: 'punk', maxHp: 36, walk: 1.6, walkZ: 1.0, attacks: [atk('e_jab', 3, 0, 22), atk('e_kick', 2, 0, 26)], aggression: 0.55, block: 0.05, dodge: 0.2, poise: 0, reward: [1, 3], food: 0.12, xp: 18, weight: 0.9, quips: ['Yo, wrong block!'] },
-  brick: { id: 'brick', name: 'Brick', sheet: 'brick', maxHp: 85, walk: 0.8, walkZ: 0.55, attacks: [atk('e_heavy', 3, 0, 28), atk('e_slam', 2, 0, 26)], aggression: 0.4, block: 0.15, dodge: 0, poise: 2, reward: [2, 5], food: 0.25, xp: 28, weight: 1.7 },
-  vinny: { id: 'vinny', name: 'Slick Vinny', sheet: 'vinny', maxHp: 42, walk: 1.45, walkZ: 1.0, attacks: [atk('e_kick', 3, 0, 26), atk('e_punch', 2, 0, 24)], aggression: 0.5, block: 0.1, dodge: 0.2, poise: 0, reward: [2, 4], food: 0.12, xp: 20, weight: 1, flank: true, quips: ['Behind ya, pal.'] },
-  sal: { id: 'sal', name: 'Sidewalk Sal', sheet: 'sal', maxHp: 80, walk: 1.0, walkZ: 0.8, attacks: [atk('sal_poke', 3, 18, 44), atk('sal_swat', 2, 0, 28)], aggression: 0.45, block: 0.5, dodge: 0.3, poise: 1, reward: [3, 6], food: 0.6, xp: 40, weight: 1.1, quips: ['Socrates walked these streets. Probably.', 'The sign says NO. Read the sign!', 'I have a PhD in pigeon.'] },
-  // ------------------------------------------------------------- Tampa
-  gator: { id: 'gator', name: 'Gator Boy', sheet: 'gator', maxHp: 42, walk: 1.2, walkZ: 0.8, attacks: [atk('e_punch', 3, 0, 24), atk('e_kick', 2, 0, 26)], aggression: 0.55, block: 0.1, dodge: 0.05, poise: 0, reward: [1, 4], food: 0.12, xp: 22, weight: 1 },
-  kyle: { id: 'kyle', name: 'Skater Kyle', sheet: 'kyle', maxHp: 34, walk: 1.8, walkZ: 1.1, attacks: [atk('e_dashkick', 3, 30, 90), atk('e_jab', 2, 0, 22)], aggression: 0.55, block: 0, dodge: 0.3, poise: 0, reward: [1, 4], food: 0.12, xp: 22, weight: 0.8, flank: true, quips: ['Gnarly!'] },
-  lou: { id: 'lou', name: 'Big Lou', sheet: 'lou', maxHp: 95, walk: 0.75, walkZ: 0.5, attacks: [atk('e_slam', 3, 0, 26), atk('e_shove', 2, 0, 22)], aggression: 0.4, block: 0.2, dodge: 0, poise: 3, reward: [3, 6], food: 0.3, xp: 32, weight: 1.9 },
-  cindy: { id: 'cindy', name: 'Citrus Cindy', sheet: 'cindy', maxHp: 34, walk: 1.2, walkZ: 0.9, attacks: [atk('e_throw_orange', 4, 60, 150), atk('e_kick', 1, 0, 24)], aggression: 0.5, block: 0, dodge: 0.2, poise: 0, reward: [2, 4], food: 0.3, xp: 22, weight: 0.9, keepAway: 100, quips: ['Fresh squeezed!'] },
-  earl: { id: 'earl', name: 'Grandpa Earl', sheet: 'earl', maxHp: 85, walk: 0.7, walkZ: 0.5, attacks: [atk('earl_cane', 3, 0, 34), atk('earl_charge', 2, 40, 110), atk('e_shove', 2, 0, 22)], aggression: 0.5, block: 0.1, dodge: 0, poise: 2, reward: [3, 7], food: 0.6, xp: 42, weight: 1.2, slowGetup: true, quips: ['Get off my lawn!', 'Back in MY day we walked uphill BOTH ways!', 'I fought a gator in \'72!'] },
+  bum: {
+    id: 'bum', name: 'NYC BUM', sheet: 'bum', maxHp: 52, walk: 1.05, walkZ: 0.75,
+    attacks: [atk('e_jab', 3, 0, 24), atk('bum_haymaker', 2, 0, 30), atk('e_shove', 1, 0, 22)],
+    aggression: 0.55, block: 0.04, dodge: 0.06, poise: 0, reward: [6, 14], food: 0.16, xp: 16, weight: 1.0,
+    quips: ['YO! Watch it!', 'This is MY corner!', 'Got any change?'],
+  },
+  bum_boss: {
+    id: 'bum_boss', name: 'DUMPSTER DUKE', sheet: 'bum_boss', maxHp: 420, walk: 1.0, walkZ: 0.7,
+    attacks: [], aggression: 0.65, block: 0.15, dodge: 0.05, poise: 4, reward: [120, 120], food: 1, xp: 200, weight: 2.0,
+    boss: {
+      title: 'King of the Alley', intro: 'You want the jar? Come take it from the Duke.',
+      defeat: "Alright, alright! The jar's yours, kid.", tired: 80,
+      phases: [
+        { below: 1.0, speed: 1, aggression: 0.55, attacks: [atk('bum_haymaker', 3, 0, 34), atk('e_jab', 3, 0, 26), atk('e_shove', 2, 0, 22)] },
+        { below: 0.5, speed: 1.25, aggression: 0.8, line: 'NOW I\'M MAD!', summon: ['bum', 'bum'], attacks: [atk('bum_haymaker', 4, 0, 36), atk('bum_boss_slam', 2, 0, 30), atk('e_shove', 1, 0, 22)] },
+      ],
+    },
+  },
 
-  // ------------------------------------------------------------- bosses
-  kemal: {
-    id: 'kemal', name: 'Kabadayı Kemal', sheet: 'kemal', maxHp: 420, walk: 0.95, walkZ: 0.7, attacks: [], aggression: 0.6, block: 0.2, dodge: 0, poise: 4, reward: [300, 300], food: 1, xp: 200, weight: 2.2,
+  // ------------------------------------------------------------- İzmir
+  fehmi: {
+    id: 'fehmi', name: 'BIYIKLI FEHMI', sheet: 'fehmi', maxHp: 64, walk: 0.78, walkZ: 0.55,
+    attacks: [atk('fehmi_slap', 3, 0, 26), atk('fehmi_backhand', 2, 0, 30)],
+    aggression: 0.5, block: 0.12, dodge: 0, poise: 2, reward: [8, 18], food: 0.2, xp: 22, weight: 1.4, sip: true,
+    quips: ['Bir çay molası... sonra.', 'Bıyığıma dikkat et.', 'Bu çay buz gibi olmuş.'],
+  },
+  fehmi_boss: {
+    id: 'fehmi_boss', name: 'BIYIKLI FEHMI', sheet: 'fehmi_boss', maxHp: 480, walk: 0.8, walkZ: 0.55,
+    attacks: [], aggression: 0.6, block: 0.2, dodge: 0, poise: 4, reward: [140, 140], food: 1, xp: 220, weight: 2.0, sip: true,
     boss: {
-      title: 'The Neighborhood Enforcer', intro: 'Bu mahalle benim, kanka.', defeat: 'Tamam... tamam! Mahalle sizin!', tired: 80,
+      title: 'The Tea House Champion', intro: 'Sip first. Then we fight. That is the rule.',
+      defeat: 'My tea has gone cold. You win, kanka.', tired: 90,
       phases: [
-        { below: 1.0, speed: 1, aggression: 0.55, attacks: [atk('kemal_whip', 3, 20, 50), atk('kemal_combo', 3, 0, 30), atk('kemal_charge', 2, 60, 200), atk('kemal_stomp', 1, 0, 80)] },
-        { below: 0.5, speed: 1.25, aggression: 0.75, summon: ['abi', 'abi'], line: 'ÇOCUKLAR! Gelin buraya!', attacks: [atk('kemal_whip', 2, 20, 50), atk('kemal_combo', 3, 0, 30), atk('kemal_charge', 3, 60, 220), atk('kemal_stomp', 2, 0, 90)] },
+        { below: 1.0, speed: 1, aggression: 0.5, attacks: [atk('fehmi_backhand', 4, 0, 32), atk('fehmi_slap', 3, 0, 26)] },
+        { below: 0.5, speed: 1.15, aggression: 0.75, line: 'ÇAYI DEVRETTİN!', attacks: [atk('fehmi_backhand', 3, 0, 34), atk('fehmi_charge', 3, 50, 180), atk('fehmi_boss_slam', 2, 0, 30)] },
       ],
     },
   },
-  selim: {
-    id: 'selim', name: 'Sunset Selim', sheet: 'selim', maxHp: 460, walk: 1.5, walkZ: 1.0, attacks: [], aggression: 0.6, block: 0.3, dodge: 0.35, poise: 3, reward: [350, 350], food: 1, xp: 240, weight: 1.3,
+
+  // ------------------------------------------------------------- İstanbul
+  dondurma: {
+    id: 'dondurma', name: 'DONDURMA MAN', sheet: 'dondurma', maxHp: 62, walk: 0.95, walkZ: 0.75,
+    attacks: [atk('dondurma_thrust', 3, 10, 44), atk('dondurma_swat', 2, 0, 26), atk('dondurma_twirl', 2, 0, 34)],
+    aggression: 0.55, block: 0.06, dodge: 0.12, poise: 1, reward: [9, 20], food: 0.22, xp: 24, weight: 1.2,
+    quips: ['Dondurma? Hayır. DONDURMA!', 'Uzun sopa, uzun mesele.', 'Ters çevir, damlar!'],
+  },
+  dondurma_boss: {
+    id: 'dondurma_boss', name: 'THE DONDURMA MAN', sheet: 'dondurma_boss', maxHp: 500, walk: 1.0, walkZ: 0.7,
+    attacks: [], aggression: 0.62, block: 0.12, dodge: 0.2, poise: 3, reward: [160, 160], food: 1, xp: 240, weight: 1.8,
     boss: {
-      title: 'The Promenade Promoter', intro: 'Ladies and gentlemen... the Kordon main event!', defeat: 'Okay okay, you headline next week.', tired: 70,
+      title: 'Master of the Long Stick', intro: 'One scoop. One chance. Catch it if you can!',
+      defeat: 'Eh... the dondurma melts. You win this round.', tired: 80,
       phases: [
-        { below: 1.0, speed: 1, aggression: 0.55, attacks: [atk('selim_jab', 4, 0, 26), atk('selim_fly', 2, 60, 200)] },
-        { below: 0.5, speed: 1.3, aggression: 0.8, line: 'SHOWTIME!', attacks: [atk('selim_jab', 3, 0, 26), atk('selim_fly', 2, 60, 220), atk('selim_spin', 3, 0, 34)] },
+        { below: 1.0, speed: 1, aggression: 0.55, attacks: [atk('dondurma_thrust', 4, 10, 48), atk('dondurma_twirl', 2, 0, 36), atk('dondurma_swat', 2, 0, 26)] },
+        { below: 0.5, speed: 1.3, aggression: 0.8, line: 'TWIRL TIME!', attacks: [atk('dondurma_boss_twirl', 3, 0, 40), atk('dondurma_thrust', 3, 10, 50), atk('e_kick', 1, 0, 26)] },
       ],
     },
   },
-  malone: {
-    id: 'malone', name: 'Knuckles Malone', sheet: 'malone', maxHp: 520, walk: 1.2, walkZ: 0.85, attacks: [], aggression: 0.65, block: 0.4, dodge: 0.2, poise: 4, reward: [40, 40], food: 1, xp: 280, weight: 1.8,
-    boss: {
-      title: 'The Underground Promoter', intro: 'Gloves off. Rules off. Ding ding.', defeat: 'Hell of a fight, kid. Hell of a fight.', tired: 70,
-      phases: [
-        { below: 1.0, speed: 1, aggression: 0.6, attacks: [atk('malone_jab', 4, 0, 30), atk('malone_upper', 2, 0, 28), atk('malone_rush', 1, 40, 160)] },
-        { below: 0.5, speed: 1.25, aggression: 0.8, line: 'Round two. No bell.', attacks: [atk('malone_jab', 3, 0, 30), atk('malone_upper', 2, 0, 28), atk('malone_rush', 3, 40, 180)] },
-      ],
-    },
+
+  // ------------------------------------------------------------- Tampa
+  tampa: {
+    id: 'tampa', name: 'THE TAMPA MAN', sheet: 'tampa', maxHp: 58, walk: 0.68, walkZ: 0.5,
+    attacks: [atk('tampa_cane', 3, 0, 36), atk('tampa_poke', 2, 12, 46), atk('e_jab', 1, 0, 22)],
+    aggression: 0.48, block: 0.1, dodge: 0, poise: 2, reward: [7, 16], food: 0.2, xp: 22, weight: 1.3, slowGetup: true,
+    quips: ['Get off my beach!', 'I fought a gator in \'72!', 'These sandals are orthopedic!'],
   },
-  gus: {
-    id: 'gus', name: 'Big Gator Gus', sheet: 'gus', maxHp: 600, walk: 0.9, walkZ: 0.65, attacks: [], aggression: 0.6, block: 0.45, dodge: 0, poise: 5, reward: [50, 50], food: 1, xp: 320, weight: 2.6,
+  tampa_boss: {
+    id: 'tampa_boss', name: 'THE TAMPA MAN', sheet: 'tampa_boss', maxHp: 520, walk: 0.7, walkZ: 0.5,
+    attacks: [], aggression: 0.58, block: 0.18, dodge: 0, poise: 4, reward: [180, 180], food: 1, xp: 260, weight: 2.1, slowGetup: true,
     boss: {
-      title: 'The Neighborhood Fixer', intro: 'Y\'all are in Gus country now.', defeat: 'Alright... you fixed ME.', tired: 90,
+      title: 'President of the Homeowners Association', intro: 'This pier is private property, sonny.',
+      defeat: 'Fine. FINE. I\'ll write you a permit.', tired: 100,
       phases: [
-        { below: 1.0, speed: 1, aggression: 0.55, attacks: [atk('gus_grab', 3, 0, 26), atk('gus_slap', 3, 0, 30), atk('gus_shove', 2, 0, 26), atk('gus_splash', 2, 50, 160)] },
-        { below: 0.5, speed: 1.2, aggression: 0.8, line: 'Now I\'m MAD.', attacks: [atk('gus_grab', 4, 0, 26), atk('gus_slap', 2, 0, 30), atk('gus_splash', 3, 40, 180), atk('gus_shove', 1, 0, 26)] },
+        { below: 1.0, speed: 1, aggression: 0.5, attacks: [atk('tampa_cane', 3, 0, 38), atk('tampa_poke', 2, 12, 48), atk('e_shove', 2, 0, 22)] },
+        { below: 0.5, speed: 1.15, aggression: 0.78, line: 'WHERE IS MY CANE?!', attacks: [atk('tampa_boss_sweep', 3, 0, 40), atk('tampa_cane', 2, 0, 38), atk('e_slam', 1, 0, 28)] },
       ],
     },
   },
 };
+
+export const ENEMY_IDS = Object.keys(ENEMIES);

@@ -15,7 +15,7 @@ import { decode, View } from '../shared/sim/snapshot';
 import type { SimEvent } from '../shared/sim/types';
 import { Renderer, SLOT_COLORS } from './render/renderer';
 import { getSheet, loadSheets } from './render/sprites';
-import { artCanvas } from './render/art';
+import { artCanvas, loadProps } from './render/art';
 import { drawText } from './render/font';
 import { Input, ACTIONS, keyLabel } from './input/input';
 import { Audio } from './audio/audio';
@@ -23,10 +23,22 @@ import { GameClient } from './net/gameclient';
 import { Link, LocalLink, RelayGuestLink, RelayHostLink, WsLink } from './net/links';
 import { supabaseChannel, wsRelayChannel, Channel } from './net/channels';
 import { loadSettings, saveSettings, sessionToken, randomId } from './settings';
+import { applyLang, initLang, t as tr } from './i18n';
 import { viewWorld } from './viewworld';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
+
+/** Full-body concept portraits used by the fighter select cards. */
+const PORTRAITS = new Map<string, HTMLImageElement>();
+function loadPortraits(): Promise<void> {
+  return Promise.all((['bt', 'sc'] as const).map((id) => new Promise<void>((res) => {
+    const img = new Image();
+    img.onload = () => { PORTRAITS.set(id, img); res(); };
+    img.onerror = () => res();
+    img.src = `./assets/portraits/${id}.png`;
+  }))).then(() => undefined);
+}
 const DEBUG = params.get('debug') === '1';
 const AUTOPILOT = params.get('autopilot') === '1';
 
@@ -56,6 +68,8 @@ class App {
   fighter: FighterId = loadSettings().fighter;
   shopSel = 0;
   shopPending: string | null = null;
+  shopMsg = '';
+  private shopMsgTimer: ReturnType<typeof setTimeout> | null = null;
   lastView: View | null = null;
   autopilot: Bot | null = null;
   ended = false;
@@ -68,14 +82,20 @@ class App {
     this.dctx.imageSmoothingEnabled = false;
     window.addEventListener('resize', () => this.fit());
     this.fit();
+    void loadPortraits();
+    this.applyVideo();
     try {
-      await loadSheets('./assets/sprites/', (d, t) => { $('loadbar').style.width = `${(d / t) * 100}%`; });
+      await Promise.all([
+        loadSheets('./assets/sprites/', (d, t) => { $('loadbar').style.width = `${(d / t) * 100}%`; }),
+        loadProps('./assets/props/'),
+      ]);
     } catch (e) {
       $('loadmsg').textContent = 'Could not load game assets. Check your connection and refresh.';
       console.error(e);
       return;
     }
     this.bindUi();
+    initLang();
     this.startAttract();
     this.drawLogo();
     const room = normalizeRoomCode(params.get('room') ?? '');
@@ -111,6 +131,11 @@ class App {
     t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => (t.className = ''), ms);
+  }
+
+  /** CRT glass on or off; the canvas blur and the overlay both key off this class. */
+  applyVideo(): void {
+    document.body.classList.toggle('crt', loadSettings().crt !== false);
   }
 
   fit(): void {
@@ -151,6 +176,7 @@ class App {
     $('resume').addEventListener('click', () => this.togglePause());
     $('quit').addEventListener('click', () => this.quitToTitle());
     this.buildCards();
+    this.syncSound();
     $<HTMLInputElement>('name').value = loadSettings().name;
     $('solo-start').addEventListener('click', () => this.startSolo());
     $('create-room').addEventListener('click', () => void this.createRoom());
@@ -162,7 +188,6 @@ class App {
     $('start-btn').addEventListener('click', () => { this.client?.send({ t: 'start', ...this.debugStart() }); this.audio.sfx('ok'); });
     $('pick-bt').addEventListener('click', () => this.lobbyPick('bt'));
     $('pick-sc').addEventListener('click', () => this.lobbyPick('sc'));
-    $('shop-leave').addEventListener('click', () => this.client?.send({ t: 'cmd', c: 'leave' }));
     $('end-title').addEventListener('click', () => this.quitToTitle());
     $('end-lobby').addEventListener('click', () => {
       if (!this.client) return;
@@ -172,8 +197,10 @@ class App {
     $('reset-keys').addEventListener('click', () => { this.input.resetKeys(); this.buildHowto(); });
     $<HTMLInputElement>('vol-music').addEventListener('input', (e) => this.audio.setVolume('music', Number((e.target as HTMLInputElement).value)));
     $<HTMLInputElement>('vol-sfx').addEventListener('input', (e) => { this.audio.setVolume('sfx', Number((e.target as HTMLInputElement).value)); this.audio.sfx('coin'); });
-    $<HTMLInputElement>('mute').addEventListener('change', (e) => { saveSettings({ muted: (e.target as HTMLInputElement).checked }); this.audio.applyVolumes(); });
+    $<HTMLInputElement>('mute').addEventListener('change', (e) => { saveSettings({ muted: (e.target as HTMLInputElement).checked }); this.audio.applyVolumes(); this.syncSound(); });
+    $('menu-sound').addEventListener('click', () => { this.audio.toggleMute(); this.syncSound(); this.audio.sfx('ok'); });
     $<HTMLInputElement>('shake').addEventListener('change', (e) => saveSettings({ shake: (e.target as HTMLInputElement).checked }));
+    $<HTMLInputElement>('crt').addEventListener('change', (e) => { saveSettings({ crt: (e.target as HTMLInputElement).checked }); this.applyVideo(); this.audio.sfx('ui'); });
     $<HTMLSelectElement>('touch-mode').addEventListener('change', (e) => { saveSettings({ touch: (e.target as HTMLSelectElement).value as 'auto' }); this.updateTouch(); });
     // touch pad
     document.querySelectorAll<HTMLButtonElement>('#touch button').forEach((b) => {
@@ -193,13 +220,31 @@ class App {
       const n = items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
       if (n) { e.preventDefault(); n.focus(); }
     });
+    document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => b.addEventListener('click', () => {
+      applyLang(b.dataset.lang === 'tr' ? 'tr' : 'en');
+      this.setSelectMode(this.selectMode);
+      if (this.screen === 'howto') this.buildHowto();
+      if (this.client) this.onClientChange();
+      this.syncSound();
+      this.audio.sfx('ui');
+    }));
     if (DEBUG) $('debug-start').hidden = false;
-    $('net-mode').textContent = netMode === 'server' ? 'Online: dedicated server (server-authoritative).' : 'Online: host-authoritative rooms over a secure relay. The room creator runs the game.';
+    $('net-mode').textContent = netMode === 'server' ? tr('Online: dedicated server (server-authoritative).') : tr('Online: host-authoritative rooms over a secure relay. The room creator runs the game.');
+  }
+
+  /** Keep the menu's quick sound toggle in step with settings and language. */
+  syncSound(): void {
+    const btn = $('menu-sound');
+    const on = !loadSettings().muted;
+    const label = tr(on ? 'SOUND: ON' : 'SOUND: OFF');
+    btn.dataset.en = on ? 'SOUND: ON' : 'SOUND: OFF';
+    btn.textContent = label;
+    btn.classList.toggle('off', !on);
   }
 
   setSelectMode(m: 'solo' | 'online'): void {
     this.selectMode = m;
-    $('select-title').textContent = m === 'solo' ? 'CHOOSE YOUR FIGHTER' : 'ONLINE CO-OP';
+    $('select-title').textContent = m === 'solo' ? tr('CHOOSE YOUR FIGHTER') : tr('ONLINE CO-OP');
     $('select-buttons').hidden = m !== 'solo';
     $('online-buttons').hidden = m !== 'online';
   }
@@ -221,9 +266,10 @@ class App {
     for (const f of Object.values(FIGHTERS)) {
       const card = document.createElement('div');
       card.className = 'card'; card.tabIndex = 0; card.dataset.f = f.id;
-      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+      // exactly 2x the 64x76 sprite cell, so nearest-neighbour scaling stays even
+      const cv = document.createElement('canvas'); cv.width = 128; cv.height = 152;
       const stats = Object.entries(f.stats).map(([k, v]) => `<div class="stat">${k.toUpperCase().padEnd(9, ' ')}<i><b style="width:${v * 20}%"></b></i></div>`).join('');
-      card.innerHTML = `<div><h3>${f.name}</h3><p>${f.blurb}</p>${stats}</div>`;
+      card.innerHTML = `<div><h3>${f.name}</h3><p>${tr(f.blurb)}</p>${stats}</div>`;
       card.prepend(cv);
       const pick = () => { this.fighter = f.id; saveSettings({ fighter: f.id }); this.audio.sfx('ok'); wrap.querySelectorAll('.card').forEach((c) => c.classList.toggle('on', (c as HTMLElement).dataset.f === f.id)); };
       card.addEventListener('click', pick);
@@ -233,13 +279,24 @@ class App {
     wrap.querySelectorAll('.card').forEach((c) => c.classList.toggle('on', (c as HTMLElement).dataset.f === this.fighter));
   }
 
-  /** Animate the fighter-card previews with real sprite frames. */
+  /** Fighter cards: the approved concept portraits, framed as a bust. */
   drawCards(): void {
     if (this.screen !== 'select') return;
-    const t = Math.floor(performance.now() / (1000 / 60));
     document.querySelectorAll<HTMLElement>('#cards .card').forEach((card) => {
       const cv = card.querySelector('canvas')!; const c = cv.getContext('2d')!;
-      const sheet = getSheet(card.dataset.f!);
+      const id = card.dataset.f!;
+      const portrait = PORTRAITS.get(id);
+      if (portrait && portrait.complete && portrait.naturalWidth) {
+        // crop the head-and-shoulders out of the full-body portrait and cover the card
+        const bh = portrait.naturalHeight * 0.5, bw = bh * (cv.width / cv.height);
+        const bx = (portrait.naturalWidth - bw) / 2;
+        c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+        c.clearRect(0, 0, cv.width, cv.height);
+        c.drawImage(portrait, bx, 0, bw, bh, 0, 0, cv.width, cv.height);
+        return;
+      }
+      const t = Math.floor(performance.now() / (1000 / 60));
+      const sheet = getSheet(id);
       if (!sheet) return;
       const on = card.classList.contains('on');
       const anim = sheet.atlas.anims[on ? 'ready' : 'idle'];
@@ -248,8 +305,10 @@ class App {
       for (const f of anim.frames) { if (tt < f.t) { fi = f.i; break; } tt -= f.t; }
       const [cw, ch] = sheet.atlas.cell;
       c.imageSmoothingEnabled = false;
-      c.clearRect(0, 0, 64, 64);
-      c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw, Math.floor(fi / sheet.atlas.cols) * ch, cw, ch, 0, 0, 64, 64);
+      c.clearRect(0, 0, cv.width, cv.height);
+      const scale = Math.min(cv.width / cw, cv.height / ch);
+      c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw, Math.floor(fi / sheet.atlas.cols) * ch, cw, ch,
+        0, cv.height - ch * scale, cw * scale, ch * scale);
     });
   }
 
@@ -265,26 +324,16 @@ class App {
     big(BRANDING.title.split(' ')[0].toUpperCase(), 4, '#f0c818');
     big(BRANDING.title.split(' ').slice(1).join(' ').toUpperCase(), 36, '#f6e8b8');
     drawText(c, BRANDING.subtitle.toUpperCase(), 160, 74, '#e0303c', { scale: 2, align: 'center', outline: true });
-    const jar = artCanvas('nutella');
-    c.drawImage(jar, 22, 70); c.drawImage(jar, 286, 70);
-    for (const [id, x] of [['bt', -14], ['sc', 270]] as [string, number][]) {
-      const sh = getSheet(id); if (!sh) continue;
-      const fi = sh.atlas.anims.victory.frames[0].i; const [cw, ch] = sh.atlas.cell;
-      c.save();
-      if (id === 'sc') { c.translate(x + cw, 0); c.scale(-1, 1); c.drawImage(sh.img, (fi % sh.atlas.cols) * cw, Math.floor(fi / sh.atlas.cols) * ch, cw, ch, 0, 30, cw, ch); }
-      else c.drawImage(sh.img, (fi % sh.atlas.cols) * cw, Math.floor(fi / sh.atlas.cols) * ch, cw, ch, x, 30, cw, ch);
-      c.restore();
-    }
   }
 
   buildHowto(): void {
     const tbl = $('keytable');
     tbl.innerHTML = '';
     for (const a of ACTIONS) {
-      const tr = document.createElement('tr');
+      const row = document.createElement('tr');
       const keys = this.input.keys[a.id] ?? [];
-      tr.innerHTML = `<td>${a.label.toUpperCase()}</td><td>${keys.map((k) => `<span class="kbd" data-a="${a.id}">${keyLabel(k)}</span>`).join(' ')}</td>`;
-      tbl.appendChild(tr);
+      row.innerHTML = `<td>${tr(a.label).toUpperCase()}</td><td>${keys.map((k) => `<span class="kbd" data-a="${a.id}">${keyLabel(k)}</span>`).join(' ')}</td>`;
+      tbl.appendChild(row);
     }
     tbl.querySelectorAll<HTMLElement>('.kbd').forEach((k) => k.addEventListener('click', () => {
       k.classList.add('wait'); k.textContent = '…';
@@ -294,12 +343,12 @@ class App {
     food.innerHTML = '';
     for (const id of ITEM_IDS) {
       const d = ITEMS[id];
-      const tr = document.createElement('tr');
+      const row = document.createElement('tr');
       const cv = document.createElement('canvas'); const a = artCanvas(id); cv.width = a.width; cv.height = a.height; cv.getContext('2d')!.drawImage(a, 0, 0);
       const td0 = document.createElement('td'); td0.appendChild(cv);
-      tr.appendChild(td0);
-      tr.insertAdjacentHTML('beforeend', `<td>${d.name.toUpperCase()}</td><td>${d.desc}</td><td>₺${d.priceTRY} / $${d.priceUSD}</td>`);
-      food.appendChild(tr);
+      row.appendChild(td0);
+      row.insertAdjacentHTML('beforeend', `<td>${tr(d.name).toUpperCase()}</td><td>${tr(d.desc)}</td><td>₺${d.price} / $${d.price}</td>`);
+      food.appendChild(row);
     }
   }
 
@@ -309,6 +358,7 @@ class App {
     $<HTMLInputElement>('vol-sfx').value = String(s.sfx);
     $<HTMLInputElement>('mute').checked = s.muted;
     $<HTMLInputElement>('shake').checked = s.shake;
+    $<HTMLInputElement>('crt').checked = s.crt !== false;
     $<HTMLSelectElement>('touch-mode').value = s.touch ?? 'auto';
   }
 
@@ -347,7 +397,7 @@ class App {
     this.ended = false;
     this.renderer.fx = new (this.renderer.fx.constructor as new () => typeof this.renderer.fx)();
     c.onChange = () => this.onClientChange();
-    c.onResult = (r) => { if (r.nonce && r.nonce === this.shopPending) { this.shopPending = null; if (!r.ok) { $('shop-msg').textContent = (r.reason ?? 'Cannot buy').toUpperCase(); this.audio.sfx('error'); } } };
+    c.onResult = (r) => { if (r.nonce && r.nonce === this.shopPending) { this.shopPending = null; if (!r.ok) { this.flashShop(tr((r.reason ?? 'Cannot buy').toUpperCase())); this.audio.sfx('error'); } } };
     c.onError = (code, msg) => { this.toast(msg, true); if (code === 'room-full' || code === 'room-not-found') this.quitToTitle(false); };
     this.autopilot = AUTOPILOT ? new Bot('', 3) : null;
     // a local authority answers the hello synchronously, before the callbacks above existed
@@ -373,6 +423,7 @@ class App {
         this.toast('Opening room…');
         const ch = await this.openChannel(code);
         this.attach(new RelayHostLink(code, ch));
+        this.toast(`Room ${code} is open — share the code or link.`);
       }
       this.go('lobby');
     } catch (e) {
@@ -389,6 +440,7 @@ class App {
         this.toast('Connecting…');
         const ch = await this.openChannel(code);
         this.attach(new RelayGuestLink('g' + randomId(8), ch));
+        this.toast(`Joined room ${code}.`);
       }
       this.go('lobby');
       $('room-code').textContent = code;
@@ -451,7 +503,7 @@ class App {
     $('start-btn').hidden = !c.isHost;
     ($('start-btn') as HTMLButtonElement).disabled = !c.canStart;
     $('pick-bt').classList.toggle('on', me?.f === 'bt'); $('pick-sc').classList.toggle('on', me?.f === 'sc');
-    $('lobby-msg').textContent = c.isHost ? (c.canStart ? 'Everyone is ready — press START!' : 'Waiting for everyone to ready up. Share the code or link.') : 'Ready up! The host starts the game.';
+    $('lobby-msg').textContent = c.isHost ? (c.canStart ? tr('Everyone is ready — press START!') : tr('Waiting for everyone to ready up. Share the code or link.')) : tr('Ready up! The host starts the game.');
   }
 
   togglePause(): void {
@@ -476,36 +528,18 @@ class App {
   }
 
   // ------------------------------------------------------------------ shop
+  /** The shop is drawn on the game canvas (renderer.drawShop); this only gates input. */
   updateShop(v: View): void {
     const me = this.renderer.localEnt(v);
     const inShop = !!me && me.st === 'shop';
-    if (inShop && this.screen === 'none') { this.shopSel = 0; this.go('shop', false); }
-    if (!inShop && this.screen === 'shop') { this.go('none', false); this.shopPending = null; }
-    if (!inShop || !me) return;
-    const sec = CHAPTERS[v.chapter].sections[v.section];
-    const spot = sec.shops.find((s) => Math.abs(me.x - s.x) < 24);
-    if (!spot) return;
-    const shop = SHOPS[spot.shop];
-    const p = v.players.find((x) => x.pid === this.client?.myId)!;
-    $('shop-name').textContent = shop.name.toUpperCase();
-    $('shop-tag').textContent = shop.tagline;
-    $('shop-money').textContent = formatMoney(p.money, v.cur);
-    $('shop-bag').textContent = `${p.bag.length}/4`;
-    const ul = $('shop-list');
-    const key = shop.stock.join(',') + p.money + this.shopSel + v.cur;
-    if (ul.dataset.key === key) return;
-    ul.dataset.key = key;
-    ul.innerHTML = '';
-    shop.stock.forEach((id, i) => {
-      const d = ITEMS[id]; const price = v.cur === 'TRY' ? d.priceTRY : d.priceUSD;
-      const li = document.createElement('li');
-      li.className = (i === this.shopSel ? 'sel ' : '') + (p.money < price ? 'poor' : '');
-      const cv = document.createElement('canvas'); const a = artCanvas(id); cv.width = a.width; cv.height = a.height; cv.getContext('2d')!.drawImage(a, 0, 0);
-      li.appendChild(cv);
-      li.insertAdjacentHTML('beforeend', `<span>${d.name.toUpperCase()}<span class="d">${d.desc}</span></span><span class="price">${formatMoney(price, v.cur)}</span>`);
-      li.addEventListener('click', () => { this.shopSel = i; this.buy(id); });
-      ul.appendChild(li);
-    });
+    if (inShop && this.screen !== 'shop') { this.shopSel = 0; this.flashShop(''); this.go('shop', false); }
+    if (!inShop && this.screen === 'shop') { this.go('none', false); this.shopPending = null; this.shopMsg = ''; }
+  }
+
+  flashShop(msg: string): void {
+    this.shopMsg = msg;
+    if (this.shopMsgTimer) clearTimeout(this.shopMsgTimer);
+    if (msg) this.shopMsgTimer = setTimeout(() => { this.shopMsg = ''; }, 2400);
   }
 
   buy(id: ItemId): void {
@@ -522,8 +556,8 @@ class App {
     const spot = sec.shops.find((s) => Math.abs(me.x - s.x) < 24);
     if (!spot) return;
     const stock = SHOPS[spot.shop].stock;
-    if (pressed & BTN.UP) { this.shopSel = (this.shopSel + stock.length - 1) % stock.length; this.audio.sfx('ui'); $('shop-list').dataset.key = ''; }
-    if (pressed & BTN.DOWN) { this.shopSel = (this.shopSel + 1) % stock.length; this.audio.sfx('ui'); $('shop-list').dataset.key = ''; }
+    if (pressed & BTN.UP) { this.shopSel = (this.shopSel + stock.length - 1) % stock.length; this.audio.sfx('ui'); }
+    if (pressed & BTN.DOWN) { this.shopSel = (this.shopSel + 1) % stock.length; this.audio.sfx('ui'); }
     if (pressed & (BTN.LIGHT | BTN.START | BTN.JUMP)) this.buy(stock[this.shopSel]);
     if (pressed & (BTN.GRAB | BTN.HEAVY)) this.client?.send({ t: 'cmd', c: 'leave' });
   }
@@ -575,6 +609,8 @@ class App {
       const evs = this.client ? this.client.takeEvents() : this.attractEvs.splice(0);
       this.processEvents(evs, v, !this.client);
       if (!loadSettings().shake) this.renderer.fx.shake = 0;
+      this.renderer.shopSel = this.shopSel;
+      this.renderer.shopMsg = this.shopMsg;
       this.renderer.render(v, !!this.client);
       this.dctx.drawImage(this.renderer.canvas, 0, 0);
       this.lastView = v;
@@ -629,8 +665,8 @@ class App {
         case 'eat': { const t = ent(e.id); if (t) { fx.sparkle(t.x, 30, t.z, '#4ad06a'); fx.text(t.x, 56, t.z, ITEMS[e.item].heal === Infinity ? 'FULL HP!' : '+HP', '#4ad06a'); } a.sfx('eat'); break; }
         case 'oneup': { const t = ent(e.id); if (t) { fx.sparkle(t.x, 30, t.z, '#f6f6f2'); fx.text(t.x, 56, t.z, '1UP!', '#8ac8ff', true); } a.sfx('oneup'); break; }
         case 'stash': { const t = ent(e.id); if (t) fx.text(t.x, 54, t.z, 'INTO BAG', '#f6e8b8'); a.sfx('ok'); break; }
-        case 'msg': { const t = ent(e.id); if (t) fx.text(t.x, 58, t.z, e.text, '#ffb04a'); if (isMe(e.id)) { a.sfx('error'); if (this.screen === 'shop') $('shop-msg').textContent = e.text; } break; }
-        case 'buy': { const t = ent(e.id); if (t) fx.text(t.x, 58, t.z, '+' + ITEMS[e.item].name.toUpperCase(), '#4ad06a'); a.sfx('buy'); if (isMe(e.id)) $('shop-msg').textContent = `BOUGHT ${ITEMS[e.item].name.toUpperCase()}!`; break; }
+        case 'msg': { const t = ent(e.id); if (t) fx.text(t.x, 58, t.z, e.text, '#ffb04a'); if (isMe(e.id)) { a.sfx('error'); if (this.screen === 'shop') this.flashShop(tr(e.text)); } break; }
+        case 'buy': { const t = ent(e.id); if (t) fx.text(t.x, 58, t.z, '+' + ITEMS[e.item].name.toUpperCase(), '#4ad06a'); a.sfx('buy'); if (isMe(e.id)) this.flashShop(`${tr('BOUGHT')} ${tr(ITEMS[e.item].name).toUpperCase()}!`); break; }
         case 'grab': a.sfx('grab'); break;
         case 'throw': a.sfx('throw'); break;
         case 'land': { const t = ent(e.id); if (t && e.heavy) { fx.dust(t.x, t.z, true); a.sfx('thud'); } break; }
@@ -643,7 +679,7 @@ class App {
         case 'respawn': { const t = ent(e.id); if (t) fx.sparkle(t.x, 30, t.z, '#ffffff'); break; }
         case 'go': a.sfx('go'); break;
         case 'section': if (CHAPTERS[e.ch].sections[e.se].boss) a.sfx('boss'); break;
-        case 'convert': this.toast('Wallets converted: ₺10 = $1. Welcome to America!'); break;
+        case 'convert': this.toast('One wallet, all streets — cash carries over.'); break;
         case 'horn': a.sfx(e.kind === 'tram' ? 'bell' : 'horn'); break;
         case 'proj': a.sfx('toss'); break;
         default: break;

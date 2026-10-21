@@ -1,9 +1,10 @@
-// Procedural pixel-art backgrounds for every street. Each section is composed once into
-// layered offscreen canvases (sky, far skyline, mid buildings, street façade, street floor)
-// that scroll with parallax. Everything is integer rects, so it stays crisp.
+// Stage backdrops, drawn from the four approved stage concepts. Each section composes
+// layered offscreen canvases (banded sky, far skyline, mid landmarks, street facades,
+// fighting plane) that scroll at different speeds. Every pixel is an integer rect: no
+// gradients, no anti-aliasing. Decorations stay behind the flat fighting plane.
 
 import { SCREEN_H, SCREEN_W, STREET_TOP } from '../../shared/data/constants';
-import { SectionDef } from '../../shared/data/stages';
+import { SectionDef, ShopSpot } from '../../shared/data/stages';
 import { SHOPS } from '../../shared/data/shops';
 import { Rng } from '../../shared/sim/rng';
 import { drawText } from './font';
@@ -12,364 +13,1160 @@ export interface BgLayers { sky: HTMLCanvasElement; far: HTMLCanvasElement; mid:
 
 type Ctx = CanvasRenderingContext2D;
 const canvas = (w: number, h: number): [HTMLCanvasElement, Ctx] => {
-  const c = document.createElement('canvas'); c.width = Math.ceil(w); c.height = h;
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, h);
   const x = c.getContext('2d')!; x.imageSmoothingEnabled = false; return [c, x];
 };
-const R = (c: Ctx, x: number, y: number, w: number, h: number, col: string) => { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
-const OUT = '#1a1220';
+const R = (c: Ctx, x: number, y: number, w: number, h: number, col: string) => {
+  c.fillStyle = col;
+  c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+};
+const P = (c: Ctx, x: number, y: number, col: string) => R(c, x, y, 1, 1, col);
+const OUT = '#141019';
 
-/** Banded sky: discrete colour bands with a checker dither between them. */
+/** Banded sky with a one-pixel checker dither where two bands meet. */
 function sky(c: Ctx, bands: string[], h: number, stars = 0, rng?: Rng): void {
   const bh = h / bands.length;
   bands.forEach((col, i) => {
-    R(c, 0, i * bh, SCREEN_W, bh + 1, col);
-    if (i > 0) { c.fillStyle = col; for (let x = 0; x < SCREEN_W; x += 2) c.fillRect(x + (i % 2), Math.round(i * bh) - 1, 1, 1); }
+    const y = Math.round(i * bh);
+    R(c, 0, y, SCREEN_W, Math.ceil(bh) + 1, col);
+    if (i > 0) {
+      const prev = bands[i - 1];
+      for (let x = 0; x < SCREEN_W; x += 2) {
+        P(c, x + (i % 2), y - 1, prev);
+        P(c, x + ((i + 1) % 2), y, col);
+      }
+    }
   });
-  if (stars && rng) for (let i = 0; i < stars; i++) R(c, rng.int(0, SCREEN_W), rng.int(0, h * 0.6), 1, 1, rng.chance(0.3) ? '#fff6c0' : '#c8d0ff');
+  if (stars && rng) for (let i = 0; i < stars; i++) {
+    const x = rng.int(0, SCREEN_W), y = rng.int(0, Math.floor(h * 0.55));
+    P(c, x, y, rng.chance(0.4) ? '#fff6c0' : '#c8d0ff');
+    if (rng.chance(0.12)) { P(c, x + 1, y, '#8a90c0'); P(c, x, y + 1, '#8a90c0'); }
+  }
 }
 
 function disc(c: Ctx, cx: number, cy: number, r: number, col: string, top = false): void {
   c.fillStyle = col;
-  for (let y = -r; y <= (top ? 0 : r); y++) { const w = Math.round(Math.sqrt(r * r - y * y)); c.fillRect(Math.round(cx - w), Math.round(cy + y), w * 2 + 1, 1); }
-}
-
-function windows(c: Ctx, x: number, y: number, w: number, h: number, rng: Rng, lit: string, dark: string, ww = 3, wh = 4, gx = 3, gy = 4, litP = 0.5): void {
-  for (let yy = y + gy; yy + wh < y + h - 2; yy += wh + gy)
-    for (let xx = x + gx; xx + ww < x + w - 1; xx += ww + gx) R(c, xx, yy, ww, wh, rng.chance(litP) ? lit : dark);
-}
-
-function mosque(c: Ctx, x: number, base: number, s: number, col: string): void {
-  R(c, x - 14 * s, base - 10 * s, 28 * s, 10 * s, col);
-  disc(c, x, base - 10 * s, 10 * s, col, true);
-  disc(c, x - 12 * s, base - 8 * s, 4 * s, col, true); disc(c, x + 12 * s, base - 8 * s, 4 * s, col, true);
-  for (const mx of [x - 20 * s, x + 20 * s]) { R(c, mx - 1.5 * s, base - 34 * s, 3 * s, 34 * s, col); R(c, mx - 2.5 * s, base - 24 * s, 5 * s, 1.5 * s, col); R(c, mx - 0.5 * s, base - 40 * s, 1 * s, 6 * s, col); }
-  R(c, x - 0.5, base - 22 * s, 1, 3 * s, col);
-}
-
-function palm(c: Ctx, x: number, base: number, h: number, trunk: string, leaf: string, leaf2: string): void {
-  for (let i = 0; i < h; i++) R(c, x + Math.round(Math.sin(i / h * 1.6) * 3), base - i, 3, 1, i % 4 === 0 ? leaf2 === trunk ? trunk : '#5a3a1a' : trunk);
-  const tx = x + Math.round(Math.sin(1.6) * 3) + 1, ty = base - h;
-  for (const [dx, dy] of [[-1, 0], [1, 0], [-0.7, 0.5], [0.7, 0.5], [0, -0.4], [-0.9, -0.3], [0.9, -0.3]])
-    for (let i = 0; i < 14; i++) R(c, tx + dx * i, ty + dy * i + (i * i) / 22, 2, 2, i % 3 ? leaf : leaf2);
-}
-
-function awning(c: Ctx, x: number, y: number, w: number, a: string, b: string): void {
-  for (let i = 0; i < w; i += 4) R(c, x + i, y, 4, 6, (i / 4) % 2 ? a : b);
-  for (let i = 0; i < w; i += 4) R(c, x + i + 1, y + 6, 2, 1, (i / 4) % 2 ? a : b);
-  R(c, x, y - 1, w, 1, OUT);
-}
-
-function sign(c: Ctx, x: number, y: number, text: string, bg: string, fg: string): void {
-  const w = text.length * 6 + 5;
-  R(c, x - 1, y - 1, w + 2, 11, OUT);
-  R(c, x, y, w, 9, bg);
-  drawText(c, text, x + 3, y + 1, fg, { shadow: null });
-}
-
-interface Theme {
-  sky: string[]; stars?: number;
-  far: (c: Ctx, w: number, rng: Rng) => void;
-  mid: (c: Ctx, w: number, rng: Rng) => void;
-  facade: (c: Ctx, w: number, rng: Rng, sec: SectionDef) => void;
-  floor: (c: Ctx, w: number, rng: Rng) => void;
-  fg?: (c: Ctx, w: number, rng: Rng) => void;
-  sun?: [number, number, number, string];
-}
-
-const FACADE_TOP = 40;
-
-function shopFront(c: Ctx, x: number, shopId: string, wall: string, trim: string, aw: [string, string]): void {
-  const s = SHOPS[shopId];
-  R(c, x - 40, FACADE_TOP + 20, 80, STREET_TOP - FACADE_TOP - 20, wall);
-  R(c, x - 40, FACADE_TOP + 20, 80, 2, trim);
-  const name = s.name.toUpperCase();
-  const tw = Math.min(78, name.length * 6 + 4);
-  R(c, x - tw / 2 - 1, FACADE_TOP + 25, tw + 2, 11, OUT); R(c, x - tw / 2, FACADE_TOP + 26, tw, 9, '#f6e8b8');
-  drawText(c, name.length > 12 ? name.slice(0, 12) : name, x, FACADE_TOP + 27, '#7a2010', { shadow: null, align: 'center' });
-  awning(c, x - 38, FACADE_TOP + 40, 76, aw[0], aw[1]);
-  // open door with warm light
-  R(c, x - 13, STREET_TOP - 38, 26, 38, OUT); R(c, x - 12, STREET_TOP - 37, 24, 37, '#f6c860'); R(c, x - 12, STREET_TOP - 37, 24, 6, '#ffe8a0');
-  R(c, x - 8, STREET_TOP - 26, 16, 10, '#d8902a'); // counter
-  for (const [i, col] of ['#d0202c', '#f6d838', '#6aa83a', '#2a6ad0'].entries()) R(c, x - 7 + i * 4, STREET_TOP - 30, 3, 4, col);
-  // shop windows
-  for (const wx of [x - 36, x + 16]) { R(c, wx - 1, STREET_TOP - 33, 22, 20, OUT); R(c, wx, STREET_TOP - 32, 20, 18, '#9ad0e8'); R(c, wx + 2, STREET_TOP - 30, 3, 10, '#d8f0ff'); }
-}
-
-function buildingRow(c: Ctx, w: number, rng: Rng, palette: string[], opts: { minH: number; maxH: number; lit: string; dark: string; trim?: string; balcony?: boolean; fireEscape?: boolean; signs?: string[]; signCols?: [string, string][]; awnings?: [string, string][]; skipAround?: number[] }): void {
-  let x = 0;
-  while (x < w) {
-    const bw = rng.int(48, 96);
-    const h = rng.int(opts.minH, opts.maxH);
-    const top = STREET_TOP - h;
-    const col = rng.pick(palette);
-    R(c, x, top, bw, h, col);
-    R(c, x, top, bw, 3, opts.trim ?? OUT);
-    R(c, x + bw - 1, top, 1, h, OUT);
-    windows(c, x + 2, top + 4, bw - 4, h - 30, rng, opts.lit, opts.dark, 4, 6, 5, 6, 0.4);
-    if (opts.balcony) for (let yy = top + 16; yy < STREET_TOP - 34; yy += 12) { R(c, x + 4, yy, bw - 8, 1, OUT); for (let bx = x + 4; bx < x + bw - 4; bx += 3) R(c, bx, yy - 4, 1, 4, OUT); }
-    if (opts.fireEscape) for (let yy = top + 14; yy < STREET_TOP - 30; yy += 14) { R(c, x + bw / 2 - 12, yy, 24, 1, '#2a2a30'); R(c, x + bw / 2 - 12, yy - 5, 1, 5, '#2a2a30'); R(c, x + bw / 2 + 11, yy - 5, 1, 5, '#2a2a30'); for (let i = 0; i < 12; i += 2) R(c, x + bw / 2 - 10 + i, yy + 2 + i, 2, 1, '#2a2a30'); }
-    // ground floor: storefront
-    const gf = STREET_TOP - 28;
-    R(c, x, gf, bw, 28, opts.trim ?? '#3a3030');
-    R(c, x + 4, gf + 8, bw - 8, 14, '#2a3a4a'); R(c, x + 6, gf + 10, 4, 10, '#4a6a8a');
-    if (opts.awnings && rng.chance(0.7)) { const [a, b] = rng.pick(opts.awnings); awning(c, x + 2, gf - 4, bw - 4, a, b); }
-    if (opts.signs && rng.chance(0.85)) { const t = rng.pick(opts.signs); const [bg, fg] = rng.pick(opts.signCols ?? [['#f6e8b8', '#7a2010']]); sign(c, x + 4, gf - 16, t, bg, fg); }
-    x += bw;
+  for (let y = -r; y <= (top ? 0 : r); y++) {
+    const w = Math.round(Math.sqrt(Math.max(0, r * r - y * y)));
+    c.fillRect(Math.round(cx - w), Math.round(cy + y), w * 2 + 1, 1);
   }
 }
 
-function cobble(c: Ctx, w: number, rng: Rng, a: string, b: string, line: string): void {
-  R(c, 0, 0, w, SCREEN_H - STREET_TOP, a);
-  for (let y = 0; y < SCREEN_H - STREET_TOP; y += 4) for (let x = (y / 4) % 2 ? 0 : 3; x < w; x += 6) { R(c, x, y, 5, 3, rng.chance(0.5) ? a : b); R(c, x, y + 3, 6, 1, line); }
+function glowDisc(c: Ctx, cx: number, cy: number, r: number, col: string, halo: string): void {
+  c.globalAlpha = 0.18;
+  disc(c, cx, cy, r + 8, halo);
+  c.globalAlpha = 0.3;
+  disc(c, cx, cy, r + 4, halo);
+  c.globalAlpha = 1;
+  disc(c, cx, cy, r, col);
 }
 
-function curb(c: Ctx, w: number, top: string, face: string): void {
-  R(c, 0, 0, w, 3, top); R(c, 0, 3, w, 2, face);
-  for (let x = 0; x < w; x += 16) R(c, x, 0, 1, 5, OUT);
+function windows(c: Ctx, x: number, y: number, w: number, h: number, rng: Rng, lit: string, dark: string, ww = 3, wh = 4, gx = 4, gy = 5, litP = 0.5, frame = OUT): void {
+  for (let yy = y + gy; yy + wh < y + h - 2; yy += wh + gy)
+    for (let xx = x + gx; xx + ww < x + w - 1; xx += ww + gx) {
+      R(c, xx - 1, yy - 1, ww + 2, wh + 2, frame);
+      R(c, xx, yy, ww, wh, rng.chance(litP) ? lit : dark);
+      if (rng.chance(0.3)) P(c, xx, yy, '#fff6d0');
+    }
+}
+
+function cornice(c: Ctx, x: number, y: number, w: number, col: string, hi: string): void {
+  R(c, x - 1, y - 2, w + 2, 2, OUT);
+  R(c, x, y - 2, w, 1, hi);
+  R(c, x, y, w, 2, col);
+  R(c, x, y + 2, w, 1, OUT);
+}
+
+function fireEscape(c: Ctx, x: number, y: number, w: number, floors: number, col = '#2a2a32', hi = '#4a4a54'): void {
+  for (let i = 0; i < floors; i++) {
+    const yy = y + i * 10;
+    R(c, x, yy, w, 1, hi); R(c, x, yy + 1, w, 1, col);
+    for (let k = 0; k < w; k += 3) R(c, x + k, yy - 4, 1, 4, col);
+    R(c, x, yy - 5, w, 1, hi);
+    // diagonal ladder
+    for (let k = 0; k < 8; k++) P(c, x + w - 1 - k, yy + 5 + k, col), P(c, x + w - 2 - k, yy + 5 + k, hi);
+  }
+}
+
+function waterTower(c: Ctx, x: number, base: number, s: number, wood: string, dark: string, hi: string): void {
+  R(c, x - 4 * s, base - 12 * s, 1 * s, 12 * s, dark);
+  R(c, x + 4 * s, base - 12 * s, 1 * s, 12 * s, dark);
+  for (let i = 0; i < 5; i++) { P(c, x - 4 * s, base - 10 * s + i * 2, hi); P(c, x + 4 * s, base - 10 * s + i * 2, hi); }
+  R(c, x - 6 * s, base - 22 * s, 13 * s, 11 * s, wood);
+  R(c, x - 6 * s, base - 22 * s, 13 * s, 1, hi);
+  R(c, x - 6 * s, base - 12 * s, 13 * s, 1, dark);
+  R(c, x - 7 * s, base - 24 * s, 15 * s, 2 * s, dark);
+  R(c, x - 2 * s, base - 20 * s, 5 * s, 1, dark);
+  for (let i = 0; i < 4; i++) R(c, x - 5 * s + i * 3 * s, base - 25 * s, 2 * s, 1, wood);
+}
+
+function awning(c: Ctx, x: number, y: number, w: number, a: string, b: string, scallop = true): void {
+  R(c, x - 1, y - 1, w + 2, 8, OUT);
+  for (let i = 0; i < w; i += 4) R(c, x + i, y, Math.min(4, w - i), 6, (i / 4) % 2 ? a : b);
+  for (let i = 0; i < w; i += 4) R(c, x + i, y, Math.min(2, w - i), 1, '#ffffff30');
+  if (scallop) for (let i = 0; i < w; i += 4) R(c, x + i + 1, y + 6, 2, 2, (i / 4) % 2 ? a : b);
+  R(c, x, y + 7, w, 1, OUT);
+}
+
+function signBoard(c: Ctx, x: number, y: number, text: string, bg: string, fg: string, w?: number, font = false): void {
+  const tw = Math.max(20, text.length * 6 + 6);
+  const ww = w ?? tw;
+  R(c, x - ww / 2 - 1, y - 1, ww + 2, 11, OUT);
+  R(c, x - ww / 2, y, ww, 9, bg);
+  R(c, x - ww / 2, y, ww, 1, '#ffffff40');
+  if (font) drawText(c, text, x, y + 1, fg, { align: 'center', shadow: null, font: 'title' });
+  else drawText(c, text, x, y + 1, fg, { align: 'center', shadow: null });
+}
+
+function palm(c: Ctx, x: number, base: number, h: number, trunk = '#7a5230', leaf = '#2a7a3a', leaf2 = '#3a9a4a'): void {
+  for (let i = 0; i < h; i++) {
+    const xx = x + Math.round(Math.sin(i / h * 1.8) * 3);
+    R(c, xx, base - i, 3, 1, i % 5 === 0 ? '#5a3a1c' : trunk);
+  }
+  const tx = x + Math.round(Math.sin(1.8) * 3) + 1, ty = base - h;
+  const dirs: [number, number][] = [[-1, 0.1], [1, 0.1], [-0.8, 0.55], [0.8, 0.55], [-0.45, 0.75], [0.45, 0.75], [-0.9, -0.25], [0.9, -0.25]];
+  for (const [dx, dy] of dirs) for (let i = 1; i < 15; i++) {
+    const px = tx + dx * i, py = ty + dy * i + (i * i) / 26;
+    R(c, px, py, 2, 2, i % 3 ? leaf : leaf2);
+    if (i % 2 === 0) R(c, px, py - 1, 1, 1, leaf2);
+  }
+  disc(c, tx, ty + 2, 2, '#4a3020');
+}
+
+function flagTR(c: Ctx, x: number, y: number): void {
+  R(c, x, y, 1, 16, '#d8d8d0');
+  R(c, x + 1, y + 1, 10, 7, '#d0202c');
+  R(c, x + 4, y + 3, 3, 3, '#f6f6f2');
+  P(c, x + 5, y + 4, '#d0202c');
+}
+
+function gull(c: Ctx, x: number, y: number): void {
+  P(c, x, y, '#f0f0f0'); P(c, x + 1, y - 1, '#f0f0f0'); P(c, x + 2, y, '#d0d0d0');
+  P(c, x + 3, y - 1, '#f0f0f0'); P(c, x + 4, y, '#f0f0f0');
+}
+
+// ---------------------------------------------------------------- storefronts
+const STYLE = {
+  ny: { wall: '#7a3428', trim: '#3a1a16', aw: ['#c82430', '#f0ece0'], signBg: '#141018', signFg: '#f0d838', win: '#f6d888' },
+  izmir: { wall: '#e8d0a8', trim: '#8a5a3a', aw: ['#2a6ab0', '#f6f2ea'], signBg: '#f6ead0', signFg: '#8a2a1a', win: '#f6c860' },
+  istanbul: { wall: '#d8b888', trim: '#6a4a2a', aw: ['#3a8a4a', '#f6f2ea'], signBg: '#2a2018', signFg: '#e8c040', win: '#f6d888' },
+  tampa: { wall: '#f0e0c0', trim: '#c07a3a', aw: ['#3a8ac0', '#f6f6f2'], signBg: '#f6e8b8', signFg: '#3a5a8a', win: '#9ad8f0' },
+} as const;
+
+function shopFront(c: Ctx, spot: ShopSpot, style: keyof typeof STYLE): void {
+  const shop = SHOPS[spot.shop];
+  const s = STYLE[style];
+  const x = spot.x, top = STREET_TOP - 62;
+  R(c, x - 44, top, 88, 62, s.wall);
+  R(c, x - 44, top, 88, 2, s.trim);
+  R(c, x - 44, top, 2, 62, s.trim); R(c, x + 42, top, 2, 62, s.trim);
+  // cornice + big sign
+  cornice(c, x - 46, top, 92, s.trim, '#f6e8b8');
+  signBoard(c, x, top + 6, shop.name, s.signBg, s.signFg, Math.min(84, shop.name.length * 11 + 12), true);
+  // lit windows with shelves of goods
+  for (const wx of [x - 38, x + 16]) {
+    R(c, wx - 1, STREET_TOP - 34, 24, 32, OUT);
+    R(c, wx, STREET_TOP - 33, 22, 30, s.win);
+    R(c, wx, STREET_TOP - 33, 22, 2, '#fff6d0');
+    for (let row = 0; row < 3; row++) {
+      R(c, wx + 1, STREET_TOP - 28 + row * 8, 20, 1, '#7a4a2a');
+      for (let i = 0; i < 6; i++) P(c, wx + 2 + i * 3, STREET_TOP - 30 + row * 8, ['#d0202c', '#2a6ad0', '#f0c818', '#5aa83a'][(i + row) % 4]);
+    }
+    R(c, wx + 2, STREET_TOP - 12, 2, 8, '#f0f0f0');
+  }
+  // door with warm light spilling out
+  R(c, x - 12, STREET_TOP - 34, 24, 34, OUT);
+  R(c, x - 11, STREET_TOP - 33, 22, 33, '#2a1a14');
+  R(c, x - 9, STREET_TOP - 30, 18, 30, '#f6c860');
+  R(c, x - 9, STREET_TOP - 30, 18, 8, '#ffe8a0');
+  R(c, x - 8, STREET_TOP - 22, 16, 8, '#d8902a');
+  for (let i = 0; i < 4; i++) P(c, x - 6 + i * 4, STREET_TOP - 20, i % 2 ? '#d0202c' : '#5aa83a');
+  R(c, x + 7, STREET_TOP - 18, 2, 2, '#f0c040');
+  // awning over the door
+  awning(c, x - 12, STREET_TOP - 40, 24, s.aw[0], s.aw[1]);
+  // pavement step
+  R(c, x - 14, STREET_TOP - 1, 28, 2, '#c8b8a8');
+  R(c, x - 14, STREET_TOP + 1, 28, 1, OUT);
+}
+
+function vendorBooth(c: Ctx, spot: ShopSpot, style: keyof typeof STYLE): void {
+  const shop = SHOPS[spot.shop];
+  const x = spot.x;
+  if (style === 'ny') {
+    // hot-dog cart under a red umbrella
+    R(c, x - 20, STREET_TOP - 26, 40, 4, OUT);
+    R(c, x - 18, STREET_TOP - 24, 36, 14, '#d02830');
+    R(c, x - 18, STREET_TOP - 24, 36, 2, '#f06a60');
+    R(c, x - 16, STREET_TOP - 18, 32, 7, '#f6e8c8');
+    for (let i = 0; i < 4; i++) R(c, x - 14 + i * 8, STREET_TOP - 17, 5, 2, '#c8602a');
+    R(c, x - 11, STREET_TOP - 10, 4, 6, '#2a2a30'); R(c, x + 7, STREET_TOP - 10, 4, 6, '#2a2a30');
+    R(c, x - 2, STREET_TOP - 44, 2, 20, '#5a5a60');
+    for (let i = -14; i <= 14; i += 4) R(c, x + i, STREET_TOP - 46, 4, 6, i % 8 ? '#d02830' : '#f6e8c8');
+    R(c, x - 16, STREET_TOP - 47, 32, 2, OUT);
+    R(c, x + 10, STREET_TOP - 34, 2, 3, '#f0c040');
+  } else if (style === 'izmir') {
+    // simit cart with a glass case
+    R(c, x - 22, STREET_TOP - 18, 44, 3, OUT);
+    R(c, x - 20, STREET_TOP - 16, 40, 10, '#7a4a22');
+    R(c, x - 20, STREET_TOP - 16, 40, 2, '#b8824a');
+    R(c, x - 18, STREET_TOP - 32, 36, 16, '#b8d8e8');
+    R(c, x - 17, STREET_TOP - 31, 34, 14, '#e8f6ff');
+    for (let i = 0; i < 5; i++) { disc(c, x - 13 + i * 6, STREET_TOP - 24, 2, '#c88a3a'); P(c, x - 13 + i * 6, STREET_TOP - 24, '#f6d87a'); }
+    R(c, x - 18, STREET_TOP - 33, 36, 2, OUT);
+    R(c, x - 12, STREET_TOP - 6, 3, 4, '#2a2222'); R(c, x + 9, STREET_TOP - 6, 3, 4, '#2a2222');
+    R(c, x - 24, STREET_TOP - 26, 6, 3, '#c82430'); // stacked simits on the side
+    signBoard(c, x, STREET_TOP - 42, shop.name, '#f6ead0', '#8a2a1a', 34);
+  } else if (style === 'istanbul') {
+    // tea stand: red canopy, samovar, stacked glasses
+    R(c, x - 18, STREET_TOP - 34, 36, 3, OUT);
+    R(c, x - 16, STREET_TOP - 31, 32, 20, '#7a2a22');
+    R(c, x - 16, STREET_TOP - 31, 32, 3, '#c84830');
+    R(c, x - 16, STREET_TOP - 12, 32, 3, '#5a1a12');
+    R(c, x - 14, STREET_TOP - 28, 12, 12, '#d8a030');
+    R(c, x - 12, STREET_TOP - 30, 8, 3, '#f0c860');
+    R(c, x - 2, STREET_TOP - 26, 2, 9, '#2a2a2a');
+    for (let i = 0; i < 3; i++) { R(c, x + 4 + i * 3, STREET_TOP - 24, 2, 3, '#e8e8e0'); P(c, x + 4 + i * 3, STREET_TOP - 23, '#b05a20'); }
+    for (let i = -16; i <= 16; i += 4) R(c, x + i, STREET_TOP - 38, 3, 4, i % 8 ? '#c82430' : '#f6e8c8');
+    R(c, x - 18, STREET_TOP - 39, 36, 2, OUT);
+    signBoard(c, x, STREET_TOP - 48, shop.name, '#2a2018', '#e8c040', 40);
+  } else {
+    // taco truck
+    R(c, x - 36, STREET_TOP - 34, 72, 26, OUT);
+    R(c, x - 34, STREET_TOP - 33, 68, 24, '#f0c040');
+    R(c, x - 34, STREET_TOP - 33, 68, 8, '#e8a820');
+    R(c, x - 34, STREET_TOP - 20, 68, 2, '#c88010');
+    R(c, x - 26, STREET_TOP - 28, 34, 12, '#2a3a4a');
+    R(c, x - 25, STREET_TOP - 27, 32, 10, '#9ad0e8');
+    R(c, x - 22, STREET_TOP - 24, 10, 5, '#f6e8c0'); // menu board
+    R(c, x + 14, STREET_TOP - 28, 14, 14, '#2a3a4a');
+    R(c, x + 15, STREET_TOP - 27, 12, 12, '#f6e8c0');
+    R(c, x - 30, STREET_TOP - 10, 10, 10, '#1a1a1a'); R(c, x + 18, STREET_TOP - 10, 10, 10, '#1a1a1a');
+    R(c, x - 28, STREET_TOP - 8, 6, 6, '#8a8a90'); R(c, x + 20, STREET_TOP - 8, 6, 6, '#8a8a90');
+    signBoard(c, x - 4, STREET_TOP - 42, shop.name, '#f6e8b8', '#3a5a8a', 56);
+    R(c, x - 38, STREET_TOP - 4, 76, 3, '#8a7a6a');
+  }
+  if (style !== 'ny') R(c, x - 22, STREET_TOP - 2, 44, 2, '#c8b8a8');
+}
+
+// ---------------------------------------------------------------- atmosphere
+/** Soft squashed ellipse, used for cloud lobes. */
+function puff(c: Ctx, cx: number, cy: number, rx: number, ry: number, col: string): void {
+  for (let y = -Math.round(ry); y <= Math.round(ry); y++) {
+    const w = Math.round(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))));
+    if (w > 0) R(c, cx - w, cy + y, w * 2, 1, col);
+  }
+}
+
+/** Puffy cloud bank: overlapping lobes with a lit crown and a shaded belly. */
+function clouds(c: Ctx, w: number, rng: Rng, y0: number, y1: number, body: string, hi: string, shade: string): void {
+  const n = Math.max(2, Math.round(w / 190));
+  for (let i = 0; i < n; i++) {
+    const cx = rng.int(20, Math.max(21, w - 20)), cy = rng.int(y0, y1);
+    const cw = rng.int(44, 92), ch = rng.int(4, 8);
+    puff(c, cx, cy, cw * 0.5, ch, body);
+    puff(c, cx - cw * 0.26, cy - ch * 0.55, cw * 0.3, ch * 0.85, body);
+    puff(c, cx + cw * 0.24, cy - ch * 0.6, cw * 0.34, ch * 0.9, body);
+    // lit crown + shaded belly
+    for (let x = Math.round(cx - cw * 0.5); x < cx + cw * 0.5; x++) {
+      const top = cy - Math.round(ch * (0.55 + 0.45 * Math.cos(((x - cx) / (cw * 0.5)) * 1.4)));
+      R(c, x, top, 1, 1, hi);
+      R(c, x, cy + ch - 1, 1, 1, shade);
+    }
+  }
+}
+
+/** A distant mountain range: layered silhouettes across the width. */
+function ridge(c: Ctx, w: number, base: number, amp: number, freq: number, col: string, hi: string, peaks = 3): void {
+  const ph = [0.7, 2.1, 4.3];
+  for (let x = 0; x < w; x += 2) {
+    let h = base;
+    for (let k = 0; k < peaks; k++) h -= Math.round(amp / (k + 1.3) * (0.5 + 0.5 * Math.sin(x / (freq * (k + 1)) + ph[k])));
+    R(c, x, h, 2, base - h + 30, col);
+    P(c, x, h, hi);
+  }
+}
+
+/** Sea or river with banded distance and a shimmering sun path. */
+function sea(c: Ctx, w: number, top: number, bottom: number, cols: string[], sunX: number, sunCol: string, rng: Rng): void {
+  const rows = bottom - top;
+  for (let i = 0; i < rows; i++) {
+    const t = i / rows;
+    const ci = Math.min(cols.length - 1, Math.floor(t * cols.length));
+    R(c, 0, top + i, w, 1, cols[ci]);
+    // long, sparse ripple highlights so the water reads as bands, not noise
+    if (i % 3 === 0) for (let x = rng.int(0, 40); x < w; x += rng.int(28, 64)) {
+      R(c, x, top + i, rng.int(3, 9), 1, cols[Math.min(cols.length - 1, ci + 1)]);
+    }
+  }
+  R(c, 0, top, w, 1, cols[cols.length - 1]);
+  // sun path: broken horizontal dashes widening toward the viewer
+  for (let i = 0; i < rows; i++) {
+    const t = i / rows;
+    const spread = 8 + t * 54;
+    const dash = 2 + Math.round(t * 6);
+    const count = 1 + Math.round(t * 5);
+    for (let k = 0; k < count; k++) {
+      const x = sunX - spread / 2 + (spread / Math.max(1, count)) * k + Math.round(Math.sin(i * 1.7 + k) * 3);
+      R(c, x, top + i, dash, 1, i % 3 === 0 ? sunCol : cols[Math.min(cols.length - 1, 2)]);
+    }
+  }
+}
+
+/** Dense modern skyline: setbacks, antennae and sparse lit windows. */
+function skyline(c: Ctx, w: number, rng: Rng, base: number, minH: number, maxH: number, col: string, col2: string, win: string[]): void {
+  let x = -10;
+  while (x < w) {
+    const bw = rng.int(16, 40);
+    const h = rng.int(minH, maxH);
+    const top = base - h;
+    R(c, x, top, bw, h, col);
+    // setback crown
+    if (rng.chance(0.35)) {
+      const sh = rng.int(6, 18), sw = Math.max(6, bw - rng.int(6, 12));
+      R(c, x + (bw - sw) / 2, top - sh, sw, sh, col2);
+      if (rng.chance(0.4)) { R(c, x + bw / 2, top - sh - rng.int(4, 10), 1, 10, col2); P(c, x + bw / 2, top - sh - 1, '#e04040'); }
+    }
+    for (let yy = top + 2; yy < base - 2; yy += 3)
+      for (let xx = x + 2; xx < x + bw - 2; xx += 3)
+        if (rng.chance(0.32)) P(c, xx, yy, win[(xx + yy) % win.length]);
+    x += bw + rng.int(0, 3);
+  }
+}
+
+/** Neon sign with a soft halo, mounted on a facade. */
+function neon(c: Ctx, x: number, y: number, text: string, fg: string, bg: string, w?: number): void {
+  const ww = w ?? Math.max(20, text.length * 6 + 8);
+  c.globalAlpha = 0.16;
+  for (let k = 2; k >= 1; k--) R(c, x - ww / 2 - k, y - k, ww + k * 2, 11 + k * 2, fg);
+  c.globalAlpha = 1;
+  R(c, x - ww / 2 - 1, y - 1, ww + 2, 11, OUT);
+  R(c, x - ww / 2, y, ww, 9, bg);
+  drawText(c, text, x, y + 1, fg, { align: 'center', shadow: null });
+  R(c, x - ww / 2, y, ww, 1, fg);
+  R(c, x - ww / 2, y + 8, ww, 1, fg);
+}
+
+/** Zigzag fire escape with landings and a drop ladder. */
+function fireEscapeFull(c: Ctx, x: number, y: number, w: number, floors: number, col = '#26262e', hi = '#4a4a56'): void {
+  for (let i = 0; i < floors; i++) {
+    const yy = y + i * 11;
+    R(c, x, yy, w, 1, hi); R(c, x, yy + 1, w, 1, col);
+    for (let k = 0; k < w; k += 3) R(c, x + k, yy - 6, 1, 6, col);
+    R(c, x, yy - 7, w, 1, hi); R(c, x, yy - 6, w, 1, col);
+    // stair run down to the next landing, alternating direction
+    for (let k = 0; k < 9; k++) {
+      const sx = i % 2 ? x + 2 + k : x + w - 3 - k;
+      P(c, sx, yy + 2 + k, col); P(c, sx, yy + 2 + k, hi);
+      if (k % 3 === 0) R(c, sx, yy + 2 + k, 1, 1, hi);
+    }
+  }
+  R(c, x + 2, y + floors * 11, w - 4, 1, col);
+}
+
+/** Concrete sidewalk: slabs, joints, cracks and stains. */
+function sidewalk(c: Ctx, w: number, y: number, h: number, base: string, joint: string, hi: string, rng: Rng): void {
+  R(c, 0, y, w, h, base);
+  R(c, 0, y, w, 1, hi);
+  for (let x = 0; x < w; x += 26) { R(c, x, y, 1, h, joint); P(c, x + 1, y + 1, hi); }
+  R(c, 0, y + Math.round(h * 0.55), w, 1, joint);
+  for (let i = 0; i < w / 8; i++) P(c, rng.int(0, w), rng.int(y + 1, y + h - 1), rng.chance(0.5) ? joint : hi);
+  for (let x = rng.int(0, 40); x < w; x += rng.int(80, 180)) {
+    for (let k = 0; k < 6; k++) P(c, x + k, y + 2 + k % 3, joint);
+  }
+}
+
+/** Asphalt with crosswalk, lane dashes, patches and puddles. */
+function asphalt(c: Ctx, w: number, y: number, h: number, base: string, dark: string, light: string, rng: Rng, lane = true): void {
+  R(c, 0, y, w, h, base);
+  R(c, 0, y, w, 1, dark);
+  for (let i = 0; i < w * 1.5; i++) P(c, rng.int(0, w), rng.int(y + 1, y + h - 1), rng.chance(0.6) ? dark : light);
+  // tar patches
+  for (let i = 0; i < w / 90; i++) {
+    const px = rng.int(0, w), pw = rng.int(14, 40), ph = rng.int(3, 7);
+    R(c, px, rng.int(y + 2, y + h - 8), pw, ph, dark);
+  }
+  if (lane) for (let x = 20; x < w; x += 90) R(c, x, y + Math.round(h * 0.55), 30, 2, '#c8b23a');
+  // puddles that catch the sky
+  for (let i = 0; i < w / 220; i++) {
+    const px = rng.int(0, w), py = rng.int(y + h * 0.4, y + h - 6), pw = rng.int(16, 34);
+    R(c, px, py, pw, 2, '#2a3244');
+    R(c, px + 2, py, pw - 6, 1, '#4a5a74');
+    P(c, px + pw - 4, py + 1, '#c8d8f0');
+  }
+}
+
+// ---------------------------------------------------------------- themes
+interface Theme {
+  sky: string[]; stars?: number; sun?: [number, number, number, string];
+  far: (c: Ctx, w: number, rng: Rng) => void;
+  mid: (c: Ctx, w: number, rng: Rng) => void;
+  near: (c: Ctx, w: number, rng: Rng, sec: SectionDef) => void;
+  floor: (c: Ctx, w: number, rng: Rng) => void;
 }
 
 const THEMES: Record<string, Theme> = {
-  // -------------------------------------------------------------- İstanbul: Kadıköy market at dusk
-  ist_market: {
-    sky: ['#2a1a4a', '#4a2a6a', '#8a3a7a', '#d0605a', '#f09a5a', '#f6c87a'], sun: [300, 108, 16, '#ffe0a0'],
+  // ================================================================ NEW YORK (night)
+  ny_street: {
+    sky: ['#16122f', '#1e1740', '#2a1c4c', '#402856', '#5e3458', '#8a4658', '#b86a52'], stars: 55, sun: [330, 32, 15, '#f8f2d4'],
     far: (c, w, rng) => {
-      R(c, 0, 110, w, 30, '#3a5a8a'); for (let x = 0; x < w; x += 7) R(c, x + rng.int(0, 3), 112 + rng.int(0, 20), 4, 1, '#f6c87a');
-      for (let x = 30; x < w; x += rng.int(110, 160)) mosque(c, x, 112, rng.chance(0.5) ? 1 : 0.8, '#3a2440');
-      for (let x = 0; x < w; x += rng.int(14, 26)) R(c, x, 104 - rng.int(0, 10), rng.int(8, 16), 30, '#4a2e4a');
-    },
-    mid: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(30, 50)) { const h = rng.int(30, 60), bw = rng.int(26, 44); R(c, x, STREET_TOP - h - 10, bw, h + 10, '#5a3a5a'); windows(c, x, STREET_TOP - h - 10, bw, h, rng, '#f6c860', '#3a2440', 2, 3, 4, 4, 0.35); } },
-    facade: (c, w, rng, sec) => {
-      buildingRow(c, w, rng, ['#d89a7a', '#e8c08a', '#b8a0c8', '#a8c8b0', '#e0a8a0'], { minH: 70, maxH: 96, lit: '#f6d888', dark: '#4a3a5a', trim: '#6a3a3a', balcony: true, signs: ['KASAP', 'BALIK', 'ÇAY', 'BAKKAL', 'LOKANTA', 'SİMİT', 'KUAFÖR', 'BÜFE'], signCols: [['#f6e8b8', '#a02020'], ['#2a6ad0', '#ffffff'], ['#c02a2a', '#f6e8b8']], awnings: [['#c02a2a', '#f6e8b8'], ['#2a7a3a', '#f6e8b8'], ['#2a5ab0', '#f6f6f6']] });
-      for (const s of sec.shops) shopFront(c, s.x, s.shop, '#a86a4a', '#6a3a2a', ['#c02a2a', '#f6e8b8']);
-      for (let x = 160; x < w; x += 260) { R(c, x, STREET_TOP - 22, 30, 10, '#8a5a2a'); for (let i = 0; i < 6; i++) R(c, x + 2 + i * 5, STREET_TOP - 26, 4, 4, rng.pick(['#e0303c', '#f08a20', '#f6d838', '#6aa83a'])); }
-    },
-    floor: (c, w, rng) => { cobble(c, w, rng, '#8a7a72', '#7a6a62', '#5a4a48'); curb(c, w, '#b8a8a0', '#6a5a58'); },
-  },
-  // -------------------------------------------------------------- İstanbul: Galata slope at night, with tram
-  ist_tram: {
-    sky: ['#0a0a24', '#14143a', '#1e1e4e', '#2a2a5e', '#3a3070'], stars: 70,
-    far: (c, w) => {
-      // Galata tower repeated far away
-      for (let x = 120; x < w; x += 380) { R(c, x, 50, 18, 70, '#2a2440'); disc(c, x + 9, 50, 11, '#2a2440', true); R(c, x + 8, 30, 2, 10, '#2a2440'); for (let y = 60; y < 110; y += 10) R(c, x + 6, y, 2, 3, '#f6d888'); }
-      R(c, 0, 108, w, 40, '#24203a');
-    },
-    mid: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(28, 46)) { const h = rng.int(40, 70), bw = rng.int(26, 40); R(c, x, STREET_TOP - h, bw, h, '#2e2a4a'); windows(c, x, STREET_TOP - h, bw, h, rng, '#f6d070', '#1e1a34', 2, 3, 4, 4, 0.45); } },
-    facade: (c, w, rng, sec) => {
-      buildingRow(c, w, rng, ['#6a5a7a', '#7a6a5a', '#5a6a7a', '#7a5a5a'], { minH: 80, maxH: 96, lit: '#f6d070', dark: '#2a2440', trim: '#3a2a3a', balcony: true, signs: ['İSTİKLAL', 'PASAJ', 'MEYHANE', 'PLAK', 'KÜNEFE', 'DÖNER'], signCols: [['#f0c040', '#3a1a10'], ['#c02a2a', '#fff6e0'], ['#30c0a0', '#102a20']], awnings: [['#7a2a3a', '#e8c08a'], ['#2a3a6a', '#e8c08a']] });
-      for (const s of sec.shops) shopFront(c, s.x, s.shop, '#5a4a6a', '#3a2a3a', ['#7a2a3a', '#e8c08a']);
-      for (let x = 60; x < w; x += 140) { R(c, x, 60, 1, STREET_TOP - 60, '#1a1a24'); R(c, x - 3, 58, 7, 3, '#1a1a24'); R(c, x - 2, 61, 5, 2, '#fff0a0'); }
-    },
-    floor: (c, w, rng) => {
-      cobble(c, w, rng, '#5a5468', '#4e4a5e', '#3a3648');
-      curb(c, w, '#8a8498', '#4a4658');
-      for (const z of [24, 38]) { R(c, 0, z, w, 2, '#b8b8c8'); R(c, 0, z + 2, w, 1, '#2a2838'); }
-      for (let x = 0; x < w; x += 8) R(c, x, 26, 3, 12, '#3a3448');
-    },
-  },
-  // -------------------------------------------------------------- İstanbul boss: rooftop over the Bosphorus
-  ist_roof: {
-    sky: ['#06061a', '#0e0e2a', '#16163a', '#20204a'], stars: 90, sun: [70, 40, 12, '#f6f0d0'],
-    far: (c, w) => {
-      R(c, 0, 104, w, 40, '#14203a');
-      // suspension bridge with lights
-      R(c, 0, 96, w, 2, '#3a3a5a'); for (const tx of [80, 300]) { R(c, tx, 60, 4, 40, '#3a3a5a'); }
-      for (let x = 0; x < w; x++) { const y = 62 + Math.round(30 * Math.pow(((x - 190) / 110), 2)); if (y < 97) R(c, x, y, 1, 1, '#5a5a8a'); if (x % 9 === 0) R(c, x, 97, 1, 1, '#f6d070'); }
-      for (let x = 0; x < w; x += 11) R(c, x, 108 + (x % 5), 3, 1, '#4a5a8a');
-    },
-    mid: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(30, 60)) mosque(c, x, 128, 0.6, '#1a1a30'); },
-    facade: (c, w) => {
-      R(c, 0, STREET_TOP - 14, w, 14, '#4a4a58'); R(c, 0, STREET_TOP - 14, w, 2, '#6a6a7a');
-      for (let x = 20; x < w; x += 140) { R(c, x, STREET_TOP - 46, 26, 32, '#5a5a6a'); disc(c, x + 13, STREET_TOP - 46, 13, '#6a6a7a', true); R(c, x + 4, STREET_TOP - 30, 18, 2, '#3a3a48'); }
-      for (let x = 90; x < w; x += 200) { disc(c, x, STREET_TOP - 34, 8, '#c8c8d0'); R(c, x - 1, STREET_TOP - 26, 2, 12, '#8a8a98'); }
-      for (let x = 0; x < w; x += 6) R(c, x, STREET_TOP - 22, 1, 8, '#2a2a34');
-      R(c, 0, STREET_TOP - 23, w, 1, '#2a2a34');
-    },
-    floor: (c, w, rng) => { R(c, 0, 0, w, SCREEN_H - STREET_TOP, '#6a6a74'); for (let i = 0; i < w / 3; i++) R(c, rng.int(0, w), rng.int(0, 70), 2, 1, rng.chance(0.5) ? '#5a5a64' : '#7a7a84'); for (let x = 0; x < w; x += 32) R(c, x, 0, 1, 80, '#5a5a64'); },
-  },
-  // -------------------------------------------------------------- İzmir: Kordon seafront at sunset
-  izm_kordon: {
-    sky: ['#3a3a8a', '#7a4a9a', '#d05a6a', '#f08a4a', '#f6b85a', '#f6d88a'], sun: [250, 100, 20, '#fff0b0'],
-    far: (c, w, rng) => {
-      for (let x = 0; x < w; x += 2) R(c, x, 92 - Math.round(10 * Math.sin(x / 50) + 6 * Math.sin(x / 17)), 2, 30, '#6a4a7a');
-      R(c, 0, 104, w, 40, '#3a6aa0'); for (let i = 0; i < w / 2; i++) R(c, rng.int(0, w), rng.int(106, 135), rng.int(2, 6), 1, rng.chance(0.3) ? '#f6d88a' : '#5a8ac0');
-      for (let i = 0; i < 6; i++) { const x = rng.int(20, w - 20); R(c, x, 110, 12, 3, '#f0f0f0'); R(c, x + 5, 102, 1, 8, '#f0f0f0'); R(c, x + 6, 103, 4, 5, '#f6f6f6'); }
-    },
-    mid: (c, w) => { for (let x = 30; x < w; x += 60) palm(c, x, STREET_TOP - 10, 46, '#7a5a3a', '#2a7a3a', '#3a9a4a'); },
-    facade: (c, w, _rng, sec) => {
-      // promenade railing with the sea behind it
-      R(c, 0, STREET_TOP - 12, w, 12, '#d8c8a8'); R(c, 0, STREET_TOP - 12, w, 1, '#f6ead0');
-      for (let x = 0; x < w; x += 8) R(c, x, STREET_TOP - 26, 2, 14, '#3a5a6a');
-      R(c, 0, STREET_TOP - 27, w, 2, '#3a5a6a');
-      for (let x = 100; x < w; x += 220) { R(c, x, STREET_TOP - 50, 2, 38, '#2a3a4a'); R(c, x - 4, STREET_TOP - 52, 10, 3, '#2a3a4a'); R(c, x - 3, STREET_TOP - 49, 8, 2, '#fff0a0'); }
-      for (const s of sec.shops) { R(c, s.x - 36, STREET_TOP - 56, 72, 56, '#f6f0e0'); shopFront(c, s.x, s.shop, '#f6f0e0', '#2a6ad0', ['#2a6ad0', '#f6f6f6']); }
-      for (let x = 260; x < w; x += 300) { R(c, x, STREET_TOP - 18, 26, 4, '#7a4a2a'); R(c, x + 2, STREET_TOP - 14, 2, 6, '#5a3a1a'); R(c, x + 22, STREET_TOP - 14, 2, 6, '#5a3a1a'); }
-    },
-    floor: (c, w, rng) => {
-      R(c, 0, 0, w, 80, '#c8b08a');
-      for (let y = 0; y < 80; y += 8) for (let x = (y / 8) % 2 ? 0 : 8; x < w; x += 16) R(c, x, y, 15, 7, rng.chance(0.5) ? '#d8c09a' : '#c0a882');
-      R(c, 0, 44, w, 18, '#c84a3a'); for (let x = 0; x < w; x += 40) { R(c, x + 10, 52, 12, 1, '#f6f6f6'); }
-      curb(c, w, '#f0e6d0', '#a89070');
-    },
-  },
-  // -------------------------------------------------------------- İzmir: Kemeraltı bazaar by day
-  izm_bazaar: {
-    sky: ['#4a8ad0', '#6aa8e0', '#8ac0ea', '#b0d8f0'],
-    far: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(16, 30)) { const h = rng.int(20, 50); R(c, x, 120 - h, rng.int(14, 26), h + 20, '#9ab0c8'); } for (let x = 60; x < w; x += 260) mosque(c, x, 118, 0.7, '#8aa0b8'); },
-    mid: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(30, 46)) { const h = rng.int(36, 56), bw = rng.int(26, 40); R(c, x, STREET_TOP - h, bw, h, rng.pick(['#e8d8b8', '#f0c8a0', '#d8e0e8'])); windows(c, x, STREET_TOP - h, bw, h, rng, '#5a7a9a', '#4a6a8a', 3, 4, 5, 5, 0.5); } },
-    facade: (c, w, rng, sec) => {
-      buildingRow(c, w, rng, ['#e8c890', '#f0d8b0', '#e0b890', '#d8c8a8'], { minH: 70, maxH: 90, lit: '#3a5a7a', dark: '#2a4a6a', trim: '#8a5a3a', signs: ['KEMERALTI', 'BOYOZ', 'KUMRU', 'LOKMA', 'GEVREK', 'KUMAŞ', 'BAHARAT'], signCols: [['#2a6ad0', '#ffffff'], ['#f6e8b8', '#7a2010'], ['#c02a2a', '#ffffff']], awnings: [['#2a6ad0', '#f6f6f6'], ['#e0a020', '#f6f6f6'], ['#c02a2a', '#f6f6f6']] });
-      for (let x = 0; x < w; x += 24) { R(c, x, 44, 1, 10, '#5a3a1a'); R(c, x - 3, 54, 7, 6, rng.pick(['#c02a2a', '#2a6ad0', '#e0a020', '#3a9a4a', '#8a3a9a'])); }
-      R(c, 0, 43, w, 1, '#5a3a1a');
-      for (const s of sec.shops) shopFront(c, s.x, s.shop, '#c8905a', '#8a5a3a', ['#e0a020', '#f6f6f6']);
-    },
-    floor: (c, w, rng) => { cobble(c, w, rng, '#b8a080', '#a89070', '#8a7458'); curb(c, w, '#d8c8a8', '#8a7458'); },
-  },
-  // -------------------------------------------------------------- İzmir boss: Konak square, clock tower
-  izm_stage: {
-    sky: ['#2a2a6a', '#5a3a8a', '#a04a8a', '#e0607a', '#f69a6a'],
-    far: (c, w) => {
-      R(c, 0, 108, w, 30, '#3a5a90');
-      const x = 190; R(c, x - 9, 30, 18, 80, '#e8d8b8'); R(c, x - 12, 104, 24, 6, '#d8c8a8'); disc(c, x, 30, 9, '#c8b898', true); R(c, x - 1, 16, 2, 6, '#c8b898');
-      disc(c, x, 50, 5, '#f6f6f0'); R(c, x, 46, 1, 4, OUT); R(c, x, 50, 3, 1, OUT);
-      for (let y = 62; y < 104; y += 10) { R(c, x - 6, y, 3, 5, '#7a5a3a'); R(c, x + 3, y, 3, 5, '#7a5a3a'); }
-    },
-    mid: (c, w) => { for (let x = 20; x < w; x += 90) palm(c, x, STREET_TOP - 8, 40, '#6a4a3a', '#2a6a3a', '#3a8a4a'); },
-    facade: (c, w) => {
-      R(c, 0, STREET_TOP - 10, w, 10, '#c8b898');
-      for (let x = 0; x < w; x += 4) { const y = STREET_TOP - 50 + Math.round(8 * Math.sin(x / 30)); R(c, x, y, 1, 1, '#3a3a3a'); if (x % 16 === 0) R(c, x, y + 1, 2, 2, ['#f6d838', '#e0303c', '#30c0f0', '#6aea6a'][(x / 16) % 4]); }
-      // promoter's stage
-      R(c, 120, STREET_TOP - 40, 150, 30, '#3a2a4a'); R(c, 120, STREET_TOP - 40, 150, 3, '#f0c040');
-      drawText(c, 'KORDON MAIN EVENT', 195, STREET_TOP - 32, '#f0c040', { align: 'center' });
-    },
-    floor: (c, w, rng) => { R(c, 0, 0, w, 80, '#b8a890'); for (let y = 0; y < 80; y += 10) for (let x = 0; x < w; x += 10) R(c, x + ((y / 10) % 2) * 5, y, 9, 9, rng.chance(0.5) ? '#c8b8a0' : '#a89880'); },
-  },
-  // -------------------------------------------------------------- New York: Flatbush Avenue at dusk
-  nyc_street: {
-    sky: ['#1a1a3a', '#2a2a5a', '#4a3a6a', '#8a4a6a', '#c86a5a'],
-    far: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(10, 22)) { const h = rng.int(40, 100); const bw = rng.int(10, 20); R(c, x, 130 - h, bw, h, '#2a2a4a'); windows(c, x, 130 - h, bw, h, rng, '#c8b060', '#2a2a4a', 1, 2, 2, 3, 0.4); if (rng.chance(0.15)) R(c, x + bw / 2, 130 - h - 12, 1, 12, '#2a2a4a'); } },
-    mid: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(30, 50)) { const h = rng.int(50, 80), bw = rng.int(28, 44); R(c, x, STREET_TOP - h, bw, h, '#4a2e3a'); windows(c, x, STREET_TOP - h, bw, h, rng, '#f0c860', '#2a1a24', 3, 3, 4, 5, 0.4); if (rng.chance(0.4)) { R(c, x + 6, STREET_TOP - h - 14, 12, 12, '#5a3a2a'); R(c, x + 5, STREET_TOP - h - 16, 14, 2, '#3a2a1a'); } } },
-    facade: (c, w, rng, sec) => {
-      buildingRow(c, w, rng, ['#8a3a2a', '#9a4a32', '#7a3428', '#6a3a3a'], { minH: 84, maxH: 96, lit: '#f0d070', dark: '#2a1a24', trim: '#3a2020', fireEscape: true, signs: ['DELI', 'PIZZA', 'LAUNDRY', 'BAGELS', '99 CENT', 'PAWN', 'CHECKS'], signCols: [['#f0d838', '#1a1a1a'], ['#e0303c', '#ffffff'], ['#30a060', '#ffffff']], awnings: [['#2a6a3a', '#f0f0f0'], ['#c02a2a', '#f0f0f0'], ['#2a3a8a', '#f0f0f0']] });
-      for (const s of sec.shops) shopFront(c, s.x, s.shop, '#5a3a2a', '#2a1a14', ['#2a6a3a', '#f0f0f0']);
-      for (let x = 30; x < w; x += 180) { // graffiti
-        const cols = ['#e0303c', '#30c0f0', '#f6d838', '#e060c0', '#6aea6a'];
-        for (let i = 0; i < 18; i++) R(c, x + i * 2, STREET_TOP - 24 + Math.round(3 * Math.sin(i / 2 + x)), 2, 4, cols[(i + x) % cols.length]);
+      // Manhattan across the river: layered towers fading into the dusk haze
+      skyline(c, w, rng, 132, 46, 104, '#231b3c', '#2d2348', ['#f4ca62', '#8ac8ff', '#f0a0b0']);
+      // one landmark spire with lit crown
+      for (let bx = 120; bx < w; bx += 470) {
+        R(c, bx, 30, 3, 74, '#2d2348'); P(c, bx + 1, 20, '#f8e0a0');
+        for (let y = 34; y < 100; y += 6) R(c, bx + 3, y, 10, 3, '#2d2348');
+        R(c, bx + 13, 26, 3, 78, '#2d2348'); P(c, bx + 14, 16, '#f8e0a0');
       }
-      for (let x = 110; x < w; x += 300) { R(c, x, STREET_TOP - 10, 6, 10, '#c02a2a'); R(c, x - 1, STREET_TOP - 11, 8, 2, '#c02a2a'); }
+      // bridge silhouette on the water line
+      for (let bx = 6; bx < w; bx += 560) {
+        R(c, bx, 96, 150, 3, '#2a2244');
+        R(c, bx + 12, 74, 5, 24, '#2a2244'); R(c, bx + 66, 66, 5, 32, '#2a2244'); R(c, bx + 122, 74, 5, 24, '#2a2244');
+        for (let x = 0; x < 150; x++) {
+          const y = 96 - Math.round(24 * Math.sin((x / 150) * Math.PI * 2));
+          P(c, bx + x, y, '#2a2244');
+          if (x % 6 === 0) for (let k = y + 1; k < 96; k += 2) P(c, bx + x, k, '#251e3c');
+        }
+      }
+      // haze
+      for (let i = 0; i < 14; i++) { c.globalAlpha = 0.10 + i * 0.02; R(c, 0, 118 + i, w, 1, '#8a6288'); }
+      c.globalAlpha = 1;
+      clouds(c, w, rng, 86, 108, '#4a2f56', '#7a4a62', '#35203f');
     },
-    floor: (c, w) => {
-      R(c, 0, 0, w, 20, '#9a9aa4'); for (let x = 0; x < w; x += 16) R(c, x, 0, 1, 20, '#7a7a84');
-      curb(c, w, '#b8b8c0', '#6a6a74');
-      R(c, 0, 20, w, 60, '#3a3a44');
-      for (let x = 0; x < w; x += 40) R(c, x, 50, 20, 2, '#f0d838');
-      for (let x = 300; x < w; x += 600) for (let i = 0; i < 8; i++) R(c, x + i * 8, 22, 5, 40, '#e8e8e8');
-    },
-  },
-  // -------------------------------------------------------------- New York: subway platform
-  nyc_subway: {
-    sky: ['#1a1a20', '#22222a', '#2a2a34'],
-    far: (c, w) => { R(c, 0, 0, w, 140, '#22222a'); },
-    mid: (c, w) => { R(c, 0, 0, w, 140, '#2a2a34'); },
-    facade: (c, w, rng, sec) => {
-      R(c, 0, FACADE_TOP - 40, w, STREET_TOP - FACADE_TOP + 40, '#e8e8e0');
-      for (let y = FACADE_TOP - 40; y < STREET_TOP; y += 4) for (let x = (y / 4) % 2 ? 0 : 4; x < w; x += 8) R(c, x, y, 7, 3, rng.chance(0.08) ? '#c8c8c0' : '#f0f0e8');
-      R(c, 0, 70, w, 10, '#2a7a3a'); R(c, 0, 82, w, 3, '#2a7a3a');
-      for (let x = 60; x < w; x += 260) { R(c, x, 88, 80, 14, '#1a1a1a'); drawText(c, 'FLATBUSH AV', x + 40, 92, '#ffffff', { align: 'center' }); for (const [i, col] of ['#e0303c', '#e0303c', '#3a9a4a', '#3a9a4a'].entries()) disc(c, x + 96 + i * 12, 95, 5, col); for (const [i, n] of ['2', '3', '4', '5'].entries()) drawText(c, n, x + 94 + i * 12, 92, '#ffffff', { shadow: null }); }
-      for (let x = 0; x < w; x += 120) { R(c, x, FACADE_TOP - 40, 12, STREET_TOP - FACADE_TOP + 40, '#3a5a8a'); R(c, x + 2, FACADE_TOP - 40, 2, STREET_TOP - FACADE_TOP + 40, '#5a7aaa'); }
-      for (const s of sec.shops) shopFront(c, s.x, s.shop, '#8a6a4a', '#3a2a1a', ['#c02a2a', '#f0f0f0']);
-      for (let x = 30; x < w; x += 70) R(c, x, 0, 30, 3, '#f6f0c0');
-    },
-    floor: (c, w) => {
-      R(c, 0, 0, w, 80, '#8a8a92'); for (let x = 0; x < w; x += 20) R(c, x, 0, 1, 56, '#7a7a82');
-      R(c, 0, 56, w, 6, '#f0d838'); for (let x = 0; x < w; x += 3) R(c, x, 57, 1, 4, '#c8b020');
-      R(c, 0, 62, w, 18, '#1a1a1e'); R(c, 0, 66, w, 2, '#8a8a90'); R(c, 0, 74, w, 2, '#8a8a90');
-    },
-  },
-  // -------------------------------------------------------------- New York boss: the boiler room
-  nyc_ring: {
-    sky: ['#140e10', '#1e1418', '#281a20'],
-    far: (c, w) => { R(c, 0, 0, w, 140, '#1e1418'); },
-    mid: (c, w, rng) => { for (let x = 0; x < w; x += 6) { const h = rng.int(18, 30); R(c, x, STREET_TOP - h, 5, h, '#120c0e'); disc(c, x + 2, STREET_TOP - h - 2, 3, '#120c0e'); } },
-    facade: (c, w) => {
-      R(c, 0, 0, w, STREET_TOP - 30, '#3a2a2a');
-      for (let y = 0; y < STREET_TOP - 30; y += 6) for (let x = (y / 6) % 2 ? 0 : 6; x < w; x += 12) R(c, x, y, 11, 5, '#4a3030');
-      for (const y of [20, 34]) { R(c, 0, y, w, 6, '#6a6a5a'); R(c, 0, y, w, 1, '#8a8a7a'); for (let x = 30; x < w; x += 70) R(c, x, y - 1, 4, 8, '#5a5a4a'); }
-      for (let x = 0; x < w; x += 4) for (let y = STREET_TOP - 60; y < STREET_TOP - 28; y += 4) { R(c, x, y, 1, 1, '#6a6a6a'); R(c, x + 2, y + 2, 1, 1, '#6a6a6a'); }
-      for (let x = 60; x < w; x += 140) { R(c, x, 0, 1, 50, '#2a2a2a'); R(c, x - 6, 50, 13, 4, '#3a3a3a'); R(c, x - 4, 54, 9, 2, '#fff0a0'); }
-      drawText(c, 'NO RULES', 192, 70, '#e0303c', { align: 'center', scale: 2 });
-    },
-    floor: (c, w, rng) => { R(c, 0, 0, w, 80, '#4a4442'); for (let i = 0; i < w / 2; i++) R(c, rng.int(0, w), rng.int(0, 80), rng.int(1, 4), 1, rng.chance(0.5) ? '#3a3432' : '#5a5452'); R(c, 0, 0, w, 2, '#e0303c'); },
-  },
-  // -------------------------------------------------------------- Tampa: Ybor strip mall
-  tpa_mall: {
-    sky: ['#2a8ae0', '#4aa0e8', '#6ab8f0', '#90d0f6', '#b8e4fa'], sun: [330, 30, 14, '#fff6c0'],
-    far: (c, w, rng) => { for (let x = 0; x < w; x += rng.int(20, 40)) R(c, x, 100 - rng.int(0, 40), rng.int(14, 24), 60, '#8ab8d8'); for (let i = 0; i < 4; i++) { const x = rng.int(0, w); R(c, x, 30 + i * 9, 26, 5, '#f6fbff'); R(c, x + 6, 26 + i * 9, 14, 5, '#f6fbff'); } },
-    mid: (c, w) => { for (let x = 10; x < w; x += 50) palm(c, x, STREET_TOP - 30, 54, '#8a6a4a', '#3aa04a', '#5ac05a'); },
-    facade: (c, w, rng, sec) => {
-      let x = 0;
-      const names = ['VAPE CITY', 'NAILS', 'PAWN', 'DENTIST', 'PIZZA', 'TAX PREP', 'TATTOO', 'CUBANOS', 'BAIT&TACKLE', 'MATTRESS'];
+    mid: (c, w, rng) => {
+      let x = -12;
       while (x < w) {
-        const bw = rng.int(64, 90);
-        R(c, x, STREET_TOP - 56, bw, 56, rng.pick(['#f0e0c8', '#e8d0b8', '#f6e8d8', '#d8e8e0']));
-        R(c, x, STREET_TOP - 56, bw, 10, rng.pick(['#e05a3a', '#3a8ac0', '#3aa06a', '#e0a020']));
-        drawText(c, rng.pick(names), x + bw / 2, STREET_TOP - 54, '#ffffff', { align: 'center' });
-        R(c, x + 6, STREET_TOP - 36, bw - 12, 26, '#4a7a9a'); R(c, x + 8, STREET_TOP - 34, 4, 22, '#8ac0e0');
-        R(c, x + bw - 1, STREET_TOP - 56, 1, 56, '#8a7a6a');
-        x += bw;
+        const bw = rng.int(50, 80), h = rng.int(64, 100), top = 136 - h;
+        const wall = rng.pick(['#4e2a26', '#572f28', '#432322', '#60352b']);
+        R(c, x, top, bw, h, wall);
+        // brick courses
+        for (let yy = top + 3; yy < 134; yy += 4)
+          for (let xx = x + 1; xx < x + bw - 1; xx += 5) P(c, xx + ((yy / 4) % 2 ? 2 : 0), yy, '#3a1d1c');
+        R(c, x, top, bw, 2, '#33191a');
+        cornice(c, x, top, bw, '#33191a', '#8a5a48');
+        // window grid with sills, air conditioners and the odd TV glow
+        for (let wy = top + 7; wy < 118; wy += 12) {
+          for (let wx = x + 5; wx < x + bw - 9; wx += 11) {
+            const lit = rng.chance(0.55);
+            const col = rng.chance(0.15) ? '#7ac8e8' : rng.chance(0.2) ? '#f0a0b0' : '#f2c460';
+            R(c, wx - 1, wy - 1, 8, 10, '#2a1618');
+            R(c, wx, wy, 6, 8, lit ? col : '#241a24');
+            R(c, wx, wy, 6, 1, lit ? '#fff0c0' : '#2e2030');
+            R(c, wx - 2, wy + 9, 10, 1, '#8a6a5a');
+            if (rng.chance(0.18)) { R(c, wx + 1, wy + 7, 5, 3, '#8a8a90'); R(c, wx + 1, wy + 7, 5, 1, '#b8b8c0'); }
+          }
+        }
+        if (rng.chance(0.65)) fireEscapeFull(c, x + 8, top + 30, Math.min(40, bw - 20), 4);
+        if (rng.chance(0.55)) waterTower(c, x + bw - 13, top + 3, 1, '#6a4a32', '#3a2418', '#a0744c');
+        if (rng.chance(0.4)) { R(c, x + bw - 6, top - 12, 1, 12, '#2a2a32'); P(c, x + bw - 6, top - 13, '#e04040'); }
+        // laundry line across the alley
+        if (rng.chance(0.3)) {
+          const ly = top + rng.int(20, 50);
+          R(c, x, ly, bw, 1, '#3a3a44');
+          for (let k = 4; k < bw - 4; k += 7) R(c, x + k, ly + 1, 4, 5, rng.pick(['#e8e4d8', '#c84a4a', '#4a7ac8', '#e8c85a']));
+        }
+        x += bw + rng.int(1, 5);
       }
-      R(c, 0, STREET_TOP - 46, w, 2, '#c8b8a0');
-      for (const s of sec.shops) shopFront(c, s.x, s.shop, '#f0d8b0', '#e05a3a', ['#e05a3a', '#f6f6f6']);
+      // rooftop signs
+      for (let bx = 60; bx < w; bx += 320) {
+        R(c, bx, 34, 74, 16, '#241820');
+        drawText(c, rng.pick(['HOTEL', 'DINER', 'KANKA']), bx + 37, 38, '#f0c860', { align: 'center', shadow: null });
+        R(c, bx + 8, 50, 2, 8, '#241820'); R(c, bx + 64, 50, 2, 8, '#241820');
+      }
     },
-    floor: (c, w) => { R(c, 0, 0, w, 14, '#d8d0c0'); curb(c, w, '#e8e0d0', '#a8a090'); R(c, 0, 14, w, 66, '#5a5a62'); for (let x = 0; x < w; x += 48) { R(c, x, 22, 2, 30, '#f0f0f0'); } },
+    near: (c, w, rng, sec) => {
+      let x = 0;
+      while (x < w) {
+        const bw = rng.int(62, 96), top = rng.int(56, 84);
+        const wall = rng.pick(['#7a3a2c', '#6a3026', '#864234', '#5e2a24']);
+        R(c, x, top, bw, STREET_TOP - top, wall);
+        // brick texture + soot under the cornice
+        for (let yy = top + 4; yy < STREET_TOP - 30; yy += 4)
+          for (let xx = x + 1; xx < x + bw - 1; xx += 5) P(c, xx + ((yy / 4) % 2 ? 2 : 0), yy, '#4a241e');
+        R(c, x, top, bw, 2, '#33181a');
+        cornice(c, x, top, bw, '#33181a', '#c08a68');
+        // upper windows
+        for (let wy = top + 8; wy < top + 34; wy += 12)
+          for (let wx = x + 5; wx < x + bw - 9; wx += 12) {
+            const lit = rng.chance(0.45);
+            R(c, wx - 1, wy - 1, 9, 11, '#2a1618');
+            R(c, wx, wy, 7, 9, lit ? '#f2c460' : '#241a26');
+            R(c, wx, wy, 7, 1, lit ? '#ffeab0' : '#2e2030');
+            R(c, wx + 3, wy, 1, 9, '#2a1618');
+            R(c, wx - 2, wy + 10, 11, 1, '#c09878');
+            if (rng.chance(0.25)) { R(c, wx + 1, wy + 2, 5, 4, rng.pick(['#8a3a4a', '#3a5a8a', '#c8c8b8'])); }
+          }
+        // ground floor: shop window, door, roll-up grille
+        R(c, x + 2, STREET_TOP - 30, bw - 4, 30, '#241a1c');
+        R(c, x + 5, STREET_TOP - 26, bw - 34, 21, '#f6cf7a');
+        R(c, x + 5, STREET_TOP - 26, bw - 34, 2, '#fff0c0');
+        for (let i = 0; i < 5; i++) R(c, x + 7 + i * 6, STREET_TOP - 20, 4, 4, rng.pick(['#d0202c', '#2a6ad0', '#f0c818', '#5aa83a', '#e8e0d0']));
+        R(c, x + 6, STREET_TOP - 16, bw - 36, 1, '#c89040');
+        R(c, x + bw - 24, STREET_TOP - 28, 20, 28, '#1a1214');
+        R(c, x + bw - 22, STREET_TOP - 26, 16, 24, rng.chance(0.4) ? '#2a3a32' : '#3a2420');
+        for (let i = 0; i < 24; i += 2) P(c, x + bw - 22 + (i % 16), STREET_TOP - 26 + i, '#4a3a32');
+        // awning + neon
+        if (rng.chance(0.7)) awning(c, x + 4, STREET_TOP - 34, bw - 30, rng.pick(['#8a2228', '#24503a', '#2a2a5e']), '#e8dcc8');
+        const words = ['PIZZA', 'DELI', 'BAR', 'PAWN', 'LAUNDRY', '99¢', 'NAILS', 'BODEGA'];
+        const fg = rng.pick(['#f0d838', '#f06a8a', '#5ae8c0', '#8ac8ff']);
+        neon(c, x + bw / 2, top + 6, rng.pick(words), fg, '#141018', Math.max(24, Math.min(bw - 10, 78)));
+        // standpipe + trash bags against the wall
+        R(c, x + 3, STREET_TOP - 8, 2, 8, '#a03028'); R(c, x + 2, STREET_TOP - 10, 4, 2, '#c84038');
+        if (rng.chance(0.5)) { disc(c, x + bw - 8, STREET_TOP - 3, 4, '#2a2a34'); disc(c, x + bw - 4, STREET_TOP - 2, 3, '#22222c'); }
+        x += bw + rng.int(1, 4);
+      }
+      for (const s of sec.shops) {
+        if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'ny'); else vendorBooth(c, s, 'ny');
+      }
+      // subway entrance with green globes and steam
+      const sx = Math.min(w - 72, 236);
+      R(c, sx - 3, STREET_TOP - 34, 58, 34, '#16201c');
+      R(c, sx, STREET_TOP - 31, 52, 31, '#20342a');
+      R(c, sx + 6, STREET_TOP - 27, 40, 23, '#0a100e');
+      for (let i = 0; i < 40; i += 4) R(c, sx + 6 + i, STREET_TOP - 27, 2, 23, '#16241c');
+      R(c, sx - 3, STREET_TOP - 36, 58, 3, '#4a7a4a');
+      for (const gx of [sx + 2, sx + 47]) {
+        R(c, gx, STREET_TOP - 46, 1, 10, '#2a3a2a');
+        c.globalAlpha = 0.22; disc(c, gx, STREET_TOP - 48, 6, '#5ae87a'); c.globalAlpha = 1;
+        disc(c, gx, STREET_TOP - 48, 3, '#5ae87a'); P(c, gx - 1, STREET_TOP - 49, '#d8ffe0');
+      }
+      signBoard(c, sx + 26, STREET_TOP - 56, 'SUBWAY', '#f6e8b8', '#1a1a1a', 48);
+      // overhead wires + string of bare bulbs
+      for (let bx = 0; bx < w; bx += 140) {
+        for (let x2 = 0; x2 < 140; x2++) { const y = 46 + Math.round(6 * Math.sin(x2 / 22)); P(c, bx + x2, y, '#241c24'); }
+        for (let bx2 = 10; bx2 < 140; bx2 += 26) { const y = 52 + Math.round(6 * Math.sin(bx2 / 22)); R(c, bx + bx2, y, 1, 3, '#241c24'); P(c, bx + bx2, y + 3, '#ffe8a0'); }
+      }
+    },
+    floor: (c, w, rng) => {
+      sidewalk(c, w, 0, 13, '#9a9aa4', '#6e6e7a', '#c2c2cc', rng);
+      R(c, 0, 13, w, 3, '#4c4c56');
+      R(c, 0, 13, w, 1, '#b8b8c2');
+      asphalt(c, w, 16, 64, '#33333c', '#2a2a33', '#42424c', rng);
+      // crosswalk near the left edge of each screen
+      for (let x = 10; x < w; x += 384) for (let k = 0; k < 6; k++) R(c, x + k * 11, 20, 5, 52, '#8a8a94');
+      for (let x = 10; x < w; x += 384) for (let k = 0; k < 6; k++) R(c, x + k * 11, 20, 5, 1, '#a8a8b2');
+      // manholes and drain grates
+      for (let x = 60; x < w; x += 240) {
+        disc(c, x, 44, 7, '#2a2a32'); disc(c, x, 44, 5, '#3a3a44');
+        for (let k = -4; k <= 4; k += 2) R(c, x + k, 40, 1, 9, '#2a2a32');
+      }
+      for (let x = 100; x < w; x += 200) {
+        R(c, x, 12, 14, 3, '#22222a');
+        for (let k = 0; k < 14; k += 2) R(c, x + k, 12, 1, 3, '#4a4a56');
+      }
+    },
   },
-  // -------------------------------------------------------------- Tampa: Bayshore lot at sunset
-  tpa_lot: {
-    sky: ['#4a3aa0', '#a04a9a', '#e05a7a', '#f68a5a', '#f6b85a'], sun: [80, 96, 18, '#fff0a0'],
+
+  ny_block: {
+    sky: ['#0c0c22', '#121236', '#181844', '#202052', '#282460'], stars: 70, sun: [70, 34, 14, '#f6f0c8'],
     far: (c, w, rng) => {
-      R(c, 0, 106, w, 40, '#3a5a9a'); for (let i = 0; i < w / 3; i++) R(c, rng.int(0, w), rng.int(108, 135), rng.int(2, 5), 1, rng.chance(0.4) ? '#f6b85a' : '#5a7ab0');
-      // Moorish minarets of a grand old hotel
-      for (let x = 240; x < w; x += 420) { R(c, x - 40, 80, 80, 26, '#a05a5a'); for (const mx of [x - 34, x - 10, x + 14, x + 34]) { R(c, mx - 2, 64, 5, 18, '#a05a5a'); disc(c, mx, 64, 4, '#d8d8e0', true); R(c, mx, 56, 1, 5, '#d8d8e0'); } }
+      R(c, 0, 96, w, 40, '#181834');
+      for (let x = 0; x < w; x += rng.int(12, 28)) {
+        const h = rng.int(30, 84), bw = rng.int(10, 20);
+        R(c, x, 132 - h, bw, h, '#12122c');
+        windows(c, x, 132 - h, bw, h, rng, '#e8c860', '#12122c', 1, 2, 2, 3, 0.3, '#12122c');
+      }
     },
-    mid: (c, w) => { for (let x = 30; x < w; x += 70) palm(c, x, STREET_TOP - 6, 50, '#5a3a2a', '#2a5a3a', '#3a7a4a'); },
-    facade: (c, w, _rng, sec) => {
-      R(c, 0, STREET_TOP - 10, w, 10, '#c8a888'); R(c, 0, STREET_TOP - 10, w, 1, '#e8c8a8');
-      for (let x = 0; x < w; x += 10) R(c, x, STREET_TOP - 18, 2, 8, '#f0f0f0');
-      R(c, 0, STREET_TOP - 19, w, 2, '#f0f0f0');
-      for (const s of sec.shops) { R(c, s.x - 40, STREET_TOP - 60, 80, 60, '#f6e0c0'); shopFront(c, s.x, s.shop, '#f6e0c0', '#3aa06a', ['#3aa06a', '#f6f6f6']); }
+    mid: (c, w, rng) => {
+      for (let x = 0; x < w; x += rng.int(52, 80)) {
+        const bw = rng.int(44, 68), h = rng.int(60, 88), top = 132 - h;
+        R(c, x, top, bw, h, '#4a2a2a'); cornice(c, x, top, bw, '#2a1818', '#7a4a3a');
+        windows(c, x + 3, top + 5, bw - 6, h - 26, rng, '#f2c860', '#241a24', 4, 5, 6, 7, 0.35, '#2a1612');
+        if (rng.chance(0.7)) fireEscape(c, x + 10, top + 24, bw - 20, 4);
+        if (rng.chance(0.4)) waterTower(c, x + 14, top, 1, '#6a4a30', '#3a2416', '#9a6a44');
+      }
     },
-    floor: (c, w) => { R(c, 0, 0, w, 80, '#4a4a54'); for (let x = 0; x < w; x += 40) { R(c, x, 4, 2, 24, '#f0f0f0'); R(c, x, 40, 2, 24, '#f0f0f0'); } R(c, 0, 32, w, 2, '#f0d838'); for (let x = 20; x < w; x += 160) { R(c, x, 12, 10, 6, '#3a3a40'); } },
+    near: (c, w, rng, sec) => {
+      let x = 0;
+      while (x < w) {
+        const bw = rng.int(64, 96), top = rng.int(50, 80);
+        R(c, x, top, bw, STREET_TOP - top, rng.pick(['#7a3428', '#6a2e24', '#8a4030']));
+        cornice(c, x, top, bw, '#3a1a16', '#b07a5a');
+        windows(c, x + 4, top + 6, bw - 8, 44, rng, '#f2c860', '#2a1a22', 4, 6, 6, 7, 0.3, '#2a1612');
+        R(c, x + 4, 108, bw - 8, 28, '#2a1a18');
+        R(c, x + 10, 112, bw - 40, 18, '#f2c860');
+        for (let i = 0; i < 3; i++) P(c, x + 14 + i * 6, 118, ['#d0202c', '#2a6ad0', '#5aa83a'][i]);
+        R(c, x + bw - 22, 110, 14, 26, '#1a1214');
+        signBoard(c, x + bw / 2, 98, rng.pick(['LIQUOR', 'BAGELS', 'CHECKS', 'PIZZA', 'NAILS']), '#141018', rng.pick(['#f0d838', '#f06a8a', '#5ae8c0']));
+        x += bw + 2;
+      }
+      for (const s of sec.shops) {
+        if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'ny'); else vendorBooth(c, s, 'ny');
+      }
+      // steam vent
+      R(c, 0, STREET_TOP - 1, 0, 0, OUT);
+      const vx = Math.min(w - 40, 860);
+      R(c, vx, STREET_TOP - 6, 14, 6, '#5a5a64');
+      for (let i = 0; i < 3; i++) { R(c, vx + 2 + i * 4, STREET_TOP - 8, 3, 2, '#2a2a32'); }
+      c.globalAlpha = 0.25;
+      for (let i = 0; i < 6; i++) disc(c, vx + 6 + Math.sin(i) * 4, STREET_TOP - 16 - i * 5, 3 + i, '#c8d8e8');
+      c.globalAlpha = 1;
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 14, '#8a8a94');
+      for (let x = 0; x < w; x += 20) R(c, x, 0, 1, 14, '#6a6a74');
+      R(c, 0, 14, w, 3, '#5a5a64');
+      R(c, 0, 17, w, 63, '#3a3a44');
+      for (let x = 30; x < w; x += 180) { R(c, x, 54, 26, 2, '#d8c840'); }
+      for (let i = 0; i < w / 2; i++) P(c, rng.int(0, w), rng.int(19, 79), rng.chance(0.4) ? '#32323c' : '#464650');
+    },
   },
-  // -------------------------------------------------------------- Tampa boss: swamp dock
-  tpa_dock: {
-    sky: ['#2a2a5a', '#4a3a6a', '#7a4a6a', '#a0605a'],
+
+  ny_boss: {
+    sky: ['#0a0a12', '#0e0e18', '#12121e'],
+    far: (c, w, rng) => { R(c, 0, 0, w, 136, '#12121e'); for (let x = 0; x < w; x += 6) { const h = rng.int(18, 30); R(c, x, STREET_TOP - h, 5, h, '#0a0a12'); disc(c, x + 2, STREET_TOP - h - 2, 3, '#0a0a12'); } },
+    mid: (c, w, rng) => {
+      R(c, 0, 0, w, STREET_TOP, '#2a1e1e');
+      for (let y = 0; y < STREET_TOP; y += 6) for (let x = (y / 6) % 2 ? 0 : 6; x < w; x += 12) R(c, x, y, 11, 5, rng.chance(0.12) ? '#3a2828' : '#332222');
+      for (const y of [22, 46, 92]) { R(c, 0, y, w, 7, '#5a5a4a'); R(c, 0, y, w, 2, '#8a8a7a'); for (let x = 20; x < w; x += 64) R(c, x, y - 2, 5, 11, '#4a4a3a'); }
+      for (let x = 0; x < w; x += 4) for (let y = 70; y < 104; y += 4) { P(c, x, y, '#6a6a6a'); P(c, x + 2, y + 2, '#6a6a6a'); }
+    },
+    near: (c, w, _rng) => {
+      R(c, 0, 104, w, STREET_TOP - 104, '#3a2a2a');
+      for (let x = 30; x < w; x += 110) { R(c, x, 0, 1, 50, '#2a2a2a'); R(c, x - 6, 50, 13, 4, '#3a3a3a'); R(c, x - 4, 54, 9, 2, '#fff0a0'); }
+      for (let x = 0; x < w; x += 26) { R(c, x, 116, 22, 18, '#5a4a3a'); R(c, x + 2, 118, 18, 2, '#7a6a5a'); }
+      signBoard(c, 192, 74, 'NO RULES', '#1a0e10', '#e0303c', 70, true);
+      R(c, 0, 104, w, 2, '#e0303c');
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 80, '#4a4442');
+      for (let i = 0; i < w / 2; i++) R(c, rng.int(0, w), rng.int(0, 80), rng.int(1, 4), 1, rng.chance(0.5) ? '#3a3432' : '#5a5452');
+      R(c, 0, 0, w, 2, '#e0303c');
+      R(c, 0, 2, w, 3, '#2a2422');
+    },
+  },
+
+  // ================================================================ İZMİR (sunset)
+  izm_kordon: {
+    sky: ['#2a1e5e', '#3a2470', '#4e2a7a', '#6a3079', '#8a3c74', '#a84a68', '#c25e5a', '#dc7a4c', '#f0a052'], sun: [250, 86, 15, '#fff0c0'],
     far: (c, w, rng) => {
-      R(c, 0, 96, w, 50, '#2a4a3a'); for (let i = 0; i < w / 3; i++) R(c, rng.int(0, w), rng.int(98, 135), rng.int(2, 6), 1, '#3a6a4a');
-      for (let x = 0; x < w; x += rng.int(18, 30)) { R(c, x + 4, 50, 4, 50, '#2a2a20'); for (let i = 0; i < 4; i++) disc(c, x + 6 + rng.int(-8, 8), 52 + i * 6, 7, '#1a3a24'); for (let i = 0; i < 5; i++) R(c, x + rng.int(-4, 14), 56, 1, rng.int(10, 24), '#5a6a4a'); }
+      // Karşıyaka hills across the bay, two ridges deep
+      ridge(c, w, 96, 18, 96, '#6a4a7e', '#8a5f92');
+      ridge(c, w, 104, 12, 58, '#54396a', '#6f4b7c');
+      clouds(c, w, rng, 18, 52, '#6a3a74', '#a8607e', '#4a2a5e');
+      clouds(c, w, rng, 54, 76, '#8a4272', '#c86a76', '#5e3266');
+      // the bay: sunset water with a shimmering path down the middle
+      sea(c, w, 104, 142, ['#b87e8a', '#c47a7e', '#cc7a76', '#d8846a', '#e29460', '#eea45c'], 250, '#ffe6a8', rng);
+      // ferry crossing with a wake
+      for (let fx = 40; fx < w; fx += 330) {
+        R(c, fx, 118, 46, 7, '#f2f2ec'); R(c, fx + 5, 111, 20, 8, '#fbfbf6');
+        R(c, fx + 7, 113, 5, 4, '#3a5a8a'); R(c, fx + 15, 113, 5, 4, '#3a5a8a');
+        R(c, fx + 2, 119, 42, 2, '#3a5a8a');
+        R(c, fx - 6, 126, 58, 1, '#f6d8a0');
+        for (let i = 0; i < 4; i++) P(c, fx + 10 + i * 8, 116, '#fff2c8');
+        for (let i = 0; i < 12; i++) R(c, fx - 10 - i * 3, 127 + (i % 3), 2, 1, '#ffd9a0');
+      }
+      // gulls
+      for (let i = 0; i < 7; i++) gull(c, rng.int(10, w - 10), rng.int(40, 74));
     },
-    mid: (c, w) => { for (let x = 50; x < w; x += 170) { R(c, x, 118, 10, 2, '#2a3a20'); R(c, x + 1, 116, 2, 2, '#c8d040'); R(c, x + 6, 116, 2, 2, '#c8d040'); } },
-    facade: (c, w) => {
-      R(c, 0, STREET_TOP - 30, w, 30, '#2a4a3a');
-      for (let x = 0; x < w; x += 30) R(c, x, STREET_TOP - 30, 4, 30, '#4a3424');
-      R(c, 0, STREET_TOP - 32, w, 3, '#5a4030');
-      R(c, 230, STREET_TOP - 46, 70, 16, '#8a8a90'); R(c, 240, STREET_TOP - 62, 20, 16, '#6a6a70'); disc(c, 280, STREET_TOP - 54, 9, '#5a5a60');
-      drawText(c, 'GUS', 265, STREET_TOP - 42, '#e0303c', { align: 'center' });
+    mid: (c, w, rng) => {
+      // the opposite shore: a low band of houses and cypresses
+      for (let x = 0; x < w; x += rng.int(14, 30)) {
+        const hw = rng.int(12, 26), hh = rng.int(3, 9);
+        R(c, x, 100 - hh, hw, hh + 6, rng.pick(['#8a6a86', '#95728e', '#7e6280']));
+        R(c, x, 100 - hh, hw, 1, '#a8838f');
+        if (rng.chance(0.3)) P(c, x + 3, 100 - hh - 3, '#6a4a6e');
+        for (let k = 2; k < hw - 2; k += 4) P(c, x + k, 100 - hh + 2, '#f2c07a');
+      }
+      // palms first, so the buildings and tower sit in front of them
+      for (let px = 10; px < w; px += 92) palm(c, px, 106, rng.int(24, 34), '#6a4a30', '#2a6a3a', '#3f8f4a');
+      // quay skyline: clock tower, mosque with minarets, low stone buildings
+      for (let bx = 40; bx < w; bx += 420) {
+        // clock tower (Saat Kulesi)
+        const tx = bx + 40;
+        R(c, tx - 9, 44, 19, 58, '#e6cda4');
+        R(c, tx - 9, 44, 2, 58, '#f6e4c4'); R(c, tx + 8, 44, 2, 58, '#c2a880');
+        R(c, tx - 12, 100, 25, 4, '#cdb28c');
+        R(c, tx - 13, 41, 27, 4, '#cdb28c');
+        R(c, tx - 7, 30, 15, 12, '#e6cda4');
+        disc(c, tx, 30, 7, '#cdb28c', true);
+        R(c, tx - 1, 24, 3, 7, '#b89a74'); P(c, tx, 22, '#e8d0a8');
+        for (const cx of [tx - 4, tx + 4]) { disc(c, cx, 37, 3, '#f8f4e8'); P(c, cx, 35, '#3a2a1a'); P(c, cx + 1, 37, '#3a2a1a'); }
+        for (let i = -1; i <= 1; i++) { R(c, tx + i * 6 - 2, 84, 4, 16, '#8a7458'); disc(c, tx + i * 6, 84, 2, '#8a7458', true); }
+        for (let y = 50; y < 82; y += 10) { R(c, tx - 6, y, 3, 6, '#8a7458'); R(c, tx + 4, y, 3, 6, '#8a7458'); }
+        // mosque: dome + two minarets
+        const mx = tx + 92;
+        R(c, mx - 26, 88, 54, 14, '#e2cfae');
+        R(c, mx - 21, 84, 42, 5, '#d8c3a2');
+        disc(c, mx, 88, 17, '#cdb28e', true);
+        for (let x = -17; x <= 17; x += 2) P(c, mx + x, 88 - Math.round(Math.sqrt(Math.max(0, 289 - x * x))) + 1, '#8a7050');
+        R(c, mx - 19, 76, 38, 12, '#e2cfae');
+        for (let i = 0; i < 3; i++) { R(c, mx - 9 + i * 8, 82, 4, 6, '#8a7050'); disc(c, mx - 7 + i * 8, 82, 2, '#8a7050', true); }
+        for (const ax of [mx - 32, mx + 32]) {
+          R(c, ax, 58, 4, 44, '#e6d2b2'); R(c, ax - 1, 58, 6, 3, '#cdb28c');
+          disc(c, ax + 2, 58, 4, '#c8b08e', true); R(c, ax + 1, 51, 2, 8, '#c8b08e'); P(c, ax + 1, 49, '#e8d0a8');
+          R(c, ax + 5, 62, 3, 1, '#c02a2a');
+        }
+        // low stone houses behind the parapet
+        for (let hx = mx + 46; hx < tx + 190; hx += 34) {
+          R(c, hx, 98, 30, 8, rng.pick(['#d8c3a0', '#cbb190', '#e0cdad']));
+          R(c, hx, 94, 30, 4, '#a8745a');
+          for (let i = 0; i < 3; i++) R(c, hx + 4 + i * 9, 99, 5, 5, '#5a4636');
+        }
+        // reflections of the shore lights on the water
+        for (let rx = tx - 16; rx < tx + 196; rx += 26) {
+          const len = rng.int(4, 10);
+          for (let k = 0; k < len; k++) P(c, rx + (k % 3 === 0 ? 1 : 0), 107 + k, k < 3 ? '#f2c890' : '#cf9078');
+        }
+      }
+      // warm haze along the horizon
+      for (let i = 0; i < 6; i++) { c.globalAlpha = 0.06; R(c, 0, 96 + i * 2, w, 2, '#f6c07a'); }
+      c.globalAlpha = 1;
     },
-    floor: (c, w) => { R(c, 0, 0, w, 80, '#7a5a3a'); for (let y = 0; y < 80; y += 6) { R(c, 0, y, w, 1, '#4a3424'); for (let x = (y * 7) % 40; x < w; x += 40) R(c, x, y, 1, 6, '#5a4030'); } },
+    near: (c, w, _rng, sec) => {
+      // stone parapet at the water's edge
+      R(c, 0, STREET_TOP - 12, w, 12, '#cdb894');
+      R(c, 0, STREET_TOP - 13, w, 1, '#f0dcbc');
+      R(c, 0, STREET_TOP - 12, w, 2, '#b8a17e');
+      for (let x = 0; x < w; x += 22) R(c, x, STREET_TOP - 10, 1, 10, '#b8a17e');
+      // iron railing on top of the parapet
+      for (let x = 0; x < w; x += 8) {
+        R(c, x, STREET_TOP - 26, 1, 13, '#22403a');
+        P(c, x, STREET_TOP - 27, '#4a8a6a');
+      }
+      R(c, 0, STREET_TOP - 27, w, 1, '#22403a');
+      R(c, 0, STREET_TOP - 26, w, 1, '#4a8a6a');
+      for (let x = 0; x < w; x += 44) { R(c, x, STREET_TOP - 30, 3, 17, '#22403a'); R(c, x - 1, STREET_TOP - 31, 5, 2, '#3a6a5a'); }
+      // lamp posts with warm globes and Turkish flags
+      for (let x = 100; x < w; x += 240) {
+        R(c, x, STREET_TOP - 62, 2, 36, '#1e2a28');
+        c.globalAlpha = 0.18; disc(c, x, STREET_TOP - 64, 9, '#ffe8a0'); c.globalAlpha = 1;
+        R(c, x - 3, STREET_TOP - 66, 8, 4, '#fff0b0');
+        P(c, x - 2, STREET_TOP - 67, '#fffbe0');
+        R(c, x - 4, STREET_TOP - 70, 10, 2, '#1e2a28');
+        R(c, x + 3, STREET_TOP - 86, 1, 16, '#e8e4d4');
+        flagTR(c, x + 4, STREET_TOP - 86);
+      }
+      // benches facing the sea
+      for (let x = 200; x < w; x += 260) {
+        R(c, x, STREET_TOP - 16, 24, 2, '#8a5a32');
+        R(c, x + 1, STREET_TOP - 21, 22, 2, '#8a5a32');
+        R(c, x + 1, STREET_TOP - 19, 22, 1, '#6a4322');
+        R(c, x + 2, STREET_TOP - 14, 2, 3, '#3a3a40'); R(c, x + 20, STREET_TOP - 14, 2, 3, '#3a3a40');
+      }
+      for (const s of sec.shops) {
+        if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'izmir'); else vendorBooth(c, s, 'izmir');
+      }
+    },
+    floor: (c, w, rng) => {
+      // stone quay paving: small warm slabs, a brick edging strip, subtle joints
+      R(c, 0, 0, w, 80, '#b39a7c');
+      for (let y = 0; y < 80; y += 6) {
+        for (let x = (y / 6) % 2 ? 0 : 7; x < w; x += 14) {
+          const tone = rng.chance(0.5) ? '#bfa688' : '#ab9274';
+          R(c, x, y, 13, 5, tone);
+          R(c, x, y, 13, 1, rng.chance(0.35) ? '#cbb294' : tone);
+          P(c, x + 12, y + 4, '#8f7a5e');
+        }
+      }
+      R(c, 0, 0, w, 2, '#cdb492');
+      R(c, 0, 0, w, 1, '#e3caa8');
+      R(c, 0, 34, w, 6, '#a85642');
+      R(c, 0, 34, w, 1, '#c06850');
+      R(c, 0, 39, w, 1, '#8a4032');
+      for (let x = 0; x < w; x += 26) P(c, x, 36, '#e0c8a4');
+      for (let i = 0; i < w / 10; i++) P(c, rng.int(0, w), rng.int(2, 78), rng.chance(0.6) ? '#a08a6c' : '#c4ac8c');
+      // cafe tables and stacked chairs along the quay
+      for (let x = 40; x < w; x += 210) {
+        R(c, x, 3, 18, 3, '#c8a878'); R(c, x, 3, 18, 1, '#e8d0ac');
+        R(c, x + 2, 6, 2, 9, '#7a5a38'); R(c, x + 14, 6, 2, 9, '#7a5a38');
+        R(c, x + 5, 0, 3, 3, '#f4f0e4'); P(c, x + 6, 1, '#b05a20');
+        R(c, x + 22, 2, 9, 2, '#c8a878'); R(c, x + 23, 4, 1, 8, '#7a5a38'); R(c, x + 29, 4, 1, 8, '#7a5a38');
+        R(c, x + 23, 0, 7, 3, '#3a5a8a'); P(c, x + 24, 1, '#5a7aa8');
+      }
+    },
+  },
+
+  izm_bazaar: {
+    sky: ['#6a9ad0', '#8ab0e0', '#a8c8ea', '#c8e0f6'],
+    far: (c, w, rng) => {
+      for (let x = 0; x < w; x += rng.int(18, 32)) { const h = rng.int(20, 46); R(c, x, 122 - h, rng.int(14, 26), h + 12, '#9ab0c8'); }
+      for (let x = 60; x < w; x += 300) { R(c, x - 16, 96, 32, 26, '#b8c8d8'); disc(c, x, 96, 11, '#b8c8d8', true); R(c, x - 24, 78, 2, 20, '#b8c8d8'); R(c, x + 22, 78, 2, 20, '#b8c8d8'); }
+    },
+    mid: (c, w, rng) => {
+      for (let x = 0; x < w; x += rng.int(34, 52)) {
+        const bw = rng.int(28, 44), h = rng.int(40, 62);
+        R(c, x, STREET_TOP - h, bw, h, rng.pick(['#e8d8b8', '#f0c8a0', '#d8e0e8']));
+        windows(c, x, STREET_TOP - h, bw, h, rng, '#5a7a9a', '#4a6a8a', 3, 4, 5, 5, 0.5);
+      }
+    },
+    near: (c, w, rng, sec) => {
+      let x = 0;
+      while (x < w) {
+        const bw = rng.int(56, 84), top = rng.int(54, 80);
+        R(c, x, top, bw, STREET_TOP - top, rng.pick(['#e8c890', '#f0d8b0', '#e0b890']));
+        R(c, x, top, bw, 3, '#8a5a3a'); cornice(c, x, top, bw, '#8a5a3a', '#f6e8c8');
+        windows(c, x + 4, top + 8, bw - 8, 34, rng, '#3a5a7a', '#2a4a6a', 3, 4, 5, 5, 0.45, '#6a4a2a');
+        R(c, x + 4, STREET_TOP - 30, bw - 8, 30, '#8a5a3a');
+        R(c, x + 8, STREET_TOP - 26, bw - 34, 20, '#3a5a7a');
+        R(c, x + 10, STREET_TOP - 24, bw - 38, 16, '#f6e0b0');
+        for (let i = 0; i < 5; i++) P(c, x + 12 + i * 5, STREET_TOP - 18, ['#c02a2a', '#e0a020', '#3a8a4a', '#8a3a9a'][i % 4]);
+        R(c, x + bw - 18, STREET_TOP - 28, 12, 28, '#5a3a1a'); R(c, x + bw - 16, STREET_TOP - 26, 8, 26, '#2a1a10');
+        awning(c, x + 4, STREET_TOP - 34, bw - 8, rng.pick(['#2a6ab0', '#c02a2a', '#e0a020']), '#f6f2ea');
+        signBoard(c, x + bw / 2, STREET_TOP - 44, rng.pick(['BAHARAT', 'KUMRU', 'LOKUM', 'GEVREK', 'KUMAŞ']), '#f6e8b8', '#7a2010');
+        x += bw + 2;
+      }
+      // hanging bunting
+      for (let bx = 0; bx < w; bx += 20) { P(c, bx, 44 + Math.round(4 * Math.sin(bx / 40)), '#5a3a1a'); }
+      for (let bx = 6; bx < w; bx += 20) R(c, bx, 46 + Math.round(4 * Math.sin(bx / 40)), 7, 5, ['#c02a2a', '#2a6ad0', '#e0a020', '#3a9a4a'][(bx / 20) % 4]);
+      for (const s of sec.shops) { if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'istanbul'); else vendorBooth(c, s, 'istanbul'); }
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 80, '#b8a080');
+      for (let y = 0; y < 80; y += 4) for (let x = (y / 4) % 2 ? 0 : 3; x < w; x += 6) { R(c, x, y, 5, 3, rng.chance(0.5) ? '#b8a080' : '#a89070'); R(c, x, y + 3, 6, 1, '#8a7458'); }
+      R(c, 0, 0, w, 3, '#d8c8a8'); R(c, 0, 3, w, 2, '#8a7458');
+    },
+  },
+
+  izm_boss: {
+    sky: ['#2a2a6a', '#5a3a8a', '#a04a8a', '#e0607a', '#f69a6a'], sun: [120, 88, 20, '#ffe0a0'],
+    far: (c, w, rng) => {
+      R(c, 0, 104, w, 32, '#3a5a90');
+      for (let x = 0; x < w; x += 2) { const h = 96 - Math.round(10 * Math.sin(x / 44) + 6 * Math.sin(x / 13)); R(c, x, h, 2, 34, '#6a4a7a'); }
+      for (let x = 44; x < w; x += 340) {
+        R(c, x - 9, 28, 18, 84, '#e8d8b8'); R(c, x - 12, 108, 24, 6, '#d8c8a8');
+        disc(c, x, 28, 9, '#c8b898', true); R(c, x - 1, 14, 2, 6, '#c8b898');
+        disc(c, x, 48, 5, '#f6f6f0'); R(c, x, 44, 1, 4, OUT); R(c, x, 48, 3, 1, OUT);
+        for (let y = 60; y < 104; y += 10) { R(c, x - 6, y, 3, 5, '#7a5a3a'); R(c, x + 3, y, 3, 5, '#7a5a3a'); }
+        P(c, x, 12, '#c8b898'); P(c, x - 1, 13, '#c8b898'); P(c, x + 1, 13, '#c8b898');
+      }
+      for (let x = 20; x < w; x += 100) palm(c, x, 112, rng.int(34, 46), '#6a4a30', '#2a6a3a', '#3a8a4a');
+    },
+    mid: (c, w, _rng) => {
+      R(c, 0, 112, w, 24, '#d8c8a8');
+      for (let x = 0; x < w; x += 5) P(c, x, 112 + (x % 4), '#c8b898');
+      for (let x = 40; x < w; x += 180) { R(c, x, 92, 22, 20, '#c8b8a0'); R(c, x + 2, 94, 18, 2, '#f6ead0'); }
+    },
+    near: (c, w, _rng) => {
+      R(c, 0, STREET_TOP - 12, w, 12, '#c8b898');
+      for (let x = 0; x < w; x += 4) { const y = STREET_TOP - 56 + Math.round(9 * Math.sin(x / 28)); P(c, x, y, '#3a3a3a'); if (x % 16 === 0) { R(c, x, y + 1, 2, 2, ['#f6d838', '#e0303c', '#30c0f0', '#6aea6a'][(x / 16) % 4]); } }
+      R(c, 110, STREET_TOP - 38, 160, 26, '#3a2a4a'); R(c, 110, STREET_TOP - 38, 160, 2, '#f0c040');
+      drawText(c, 'KORDON MAIN EVENT', 190, STREET_TOP - 32, '#f0c040', { align: 'center', shadow: null });
+      R(c, 118, STREET_TOP - 12, 144, 12, '#2a1a3a');
+      for (let x = 0; x < w; x += 220) flagTR(c, x + 20, STREET_TOP - 48);
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 80, '#b8a890');
+      for (let y = 0; y < 80; y += 10) for (let x = 0; x < w; x += 10) R(c, x + ((y / 10) % 2) * 5, y, 9, 9, rng.chance(0.5) ? '#c8b8a0' : '#a89880');
+    },
+  },
+
+  // ================================================================ ISTANBUL (morning)
+  ist_market: {
+    sky: ['#3a8ad8', '#5aa0e0', '#7ab8ea', '#9ad0f4', '#bce0fa'],
+    far: (c, w, rng) => {
+      R(c, 0, 96, w, 40, '#3a6aa0');
+      for (let i = 0; i < w / 2; i++) R(c, rng.int(0, w), rng.int(98, 132), rng.int(2, 7), 1, '#5a8ac0');
+      // Bosphorus bridge + ferry
+      R(c, 0, 76, w, 2, '#8a9aa8');
+      for (let x = 30; x < w; x += 180) { R(c, x, 44, 3, 32, '#8a9aa8'); R(c, x - 2, 42, 7, 3, '#8a9aa8'); }
+      for (let x = 0; x < w; x++) { const y = 50 + Math.round(26 * Math.pow((x % 180 - 90) / 90, 2)); if (y < 78) P(c, x, y, '#9aaab8'); }
+      const fx = 200;
+      R(c, fx, 104, 40, 6, '#f6f6f2'); R(c, fx + 5, 98, 16, 7, '#f6f6f2');
+      for (let i = 0; i < 4; i++) R(c, fx + 7 + i * 4, 100, 3, 3, '#3a5a8a');
+      R(c, fx - 2, 110, 44, 1, '#d8c8a8');
+    },
+    mid: (c, w, rng) => {
+      R(c, 0, 116, w, 20, '#c8b8a0');
+      for (let x = 40; x < w; x += 150) {
+        // domes + minarets
+        R(c, x, 78, 54, 38, '#d8c8b8'); disc(c, x + 27, 78, 20, '#c8b8a8', true);
+        for (const mx of [x - 14, x + 62]) { R(c, mx, 58, 4, 58, '#d8c8b8'); disc(c, mx + 2, 58, 4, '#b8a898', true); R(c, mx + 2, 50, 1, 8, '#b8a898'); }
+        windows(c, x + 6, 86, 42, 24, rng, '#5a6a8a', '#4a5a7a', 3, 4, 4, 4, 0.4);
+      }
+      // Galata tower
+      for (let x = 300; x < w; x += 460) {
+        R(c, x - 14, 34, 28, 82, '#b8a898'); R(c, x - 16, 110, 32, 6, '#a89888');
+        disc(c, x, 34, 12, '#9a8a78', true); R(c, x - 2, 14, 4, 8, '#9a8a78'); R(c, x - 1, 8, 2, 6, '#8a7a68');
+        for (let y = 44; y < 108; y += 12) { R(c, x - 8, y, 3, 5, '#5a4a3a'); R(c, x + 5, y, 3, 5, '#5a4a3a'); }
+        R(c, x - 4, 50, 8, 5, '#6a5a4a');
+      }
+      for (let x = 16; x < w; x += 120) palm(c, x, 118, rng.int(30, 40), '#6a4a30', '#2a6a3a', '#3a8a4a');
+      for (let i = 0; i < 5; i++) gull(c, rng.int(20, w - 20), rng.int(20, 56));
+    },
+    near: (c, w, rng, sec) => {
+      R(c, 0, 46, w, STREET_TOP - 46, '#1e1a16');
+      let x = 0;
+      while (x < w) {
+        const bw = rng.int(62, 94), top = rng.int(54, 82);
+        R(c, x, top, bw, STREET_TOP - top, rng.pick(['#d8b888', '#c8a878', '#e0c098', '#c09a70']));
+        R(c, x, top, bw, 2, '#6a4a2a');
+        cornice(c, x, top, bw, '#6a4a2a', '#f0d8b0');
+        windows(c, x + 4, top + 6, bw - 8, STREET_TOP - top - 34, rng, '#3a5a7a', '#2a3a52', 3, 4, 5, 5, 0.4, '#5a3a1a');
+        // market stall ground floor
+        R(c, x + 2, STREET_TOP - 30, bw - 4, 30, '#6a4a2a');
+        R(c, x + 5, STREET_TOP - 26, bw - 30, 20, '#3a2a1a');
+        for (let i = 0; i < 5; i++) R(c, x + 7 + i * 6, STREET_TOP - 20, 4, 4, ['#e0a020', '#c02a2a', '#3a9a4a', '#d8d0b0', '#8a3a9a'][i]);
+        awning(c, x + 3, STREET_TOP - 36, bw - 6, rng.pick(['#c02a2a', '#3a8a4a', '#2a6ab0']), '#f6f2ea');
+        signBoard(c, x + bw / 2, STREET_TOP - 46, rng.pick(['ÇARŞI', 'BAHARAT', 'ÇAY', 'LOKUM', 'PEYNİR']), '#2a2018', '#e8c040');
+        x += bw + 2;
+      }
+      for (const s of sec.shops) { if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'istanbul'); else vendorBooth(c, s, 'istanbul'); }
+      // hanging lanterns
+      for (let lx = 30; lx < w; lx += 96) {
+        R(c, lx, 44, 1, 12, '#3a2a1a'); R(c, lx - 3, 56, 7, 5, '#e8b040'); R(c, lx - 2, 57, 5, 2, '#fff0b0'); P(c, lx, 61, '#c88020');
+      }
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 80, '#8a7a66');
+      for (let y = 0; y < 80; y += 5) for (let x = (y / 5) % 2 ? 0 : 4; x < w; x += 8) { R(c, x, y, 7, 4, rng.chance(0.5) ? '#9a8a76' : '#82725e'); R(c, x, y + 4, 8, 1, '#6a5a48'); }
+      R(c, 0, 0, w, 3, '#b8a888'); R(c, 0, 3, w, 2, '#6a5a48');
+    },
+  },
+
+  ist_galata: {
+    sky: ['#2a6ab0', '#4a8ad0', '#6aa8e0', '#8ac0ea', '#a8d4f4'],
+    far: (c, w, _rng) => {
+      R(c, 0, 92, w, 44, '#3a6a9a');
+      for (let x = 0; x < w; x += 2) { const h = 90 - Math.round(8 * Math.sin(x / 50)); R(c, x, h, 2, 42, '#4a6a8a'); }
+      for (let x = 80; x < w; x += 360) {
+        R(c, x - 12, 40, 24, 60, '#b8a898'); disc(c, x, 40, 10, '#a89888', true); R(c, x - 2, 22, 4, 8, '#a89888');
+        for (let y = 48; y < 98; y += 10) { R(c, x - 6, y, 3, 4, '#5a4a3a'); R(c, x + 4, y, 3, 4, '#5a4a3a'); }
+      }
+    },
+    mid: (c, w, rng) => {
+      for (let x = 0; x < w; x += rng.int(30, 44)) {
+        const bw = rng.int(26, 38), h = rng.int(44, 70), top = 120 - h;
+        R(c, x, top, bw, h, rng.pick(['#7a5a4a', '#8a6a5a', '#6a4a3a']));
+        windows(c, x + 2, top + 4, bw - 4, h - 8, rng, '#f0d070', '#2a1e1a', 2, 3, 3, 4, 0.3);
+      }
+    },
+    near: (c, w, rng, sec) => {
+      let x = 0;
+      while (x < w) {
+        const bw = rng.int(58, 88), top = rng.int(52, 78);
+        R(c, x, top, bw, STREET_TOP - top, rng.pick(['#7a5a4a', '#6a4a3a', '#8a6a5a']));
+        cornice(c, x, top, bw, '#3a2a1a', '#c8a888');
+        windows(c, x + 4, top + 6, bw - 8, 40, rng, '#f0d070', '#2a1e1a', 3, 4, 5, 5, 0.35, '#2a1a12');
+        R(c, x + 4, STREET_TOP - 28, bw - 8, 28, '#3a2a1a');
+        R(c, x + 8, STREET_TOP - 24, bw - 36, 18, '#f0d070');
+        R(c, x + 8, STREET_TOP - 24, bw - 36, 2, '#fff0b0');
+        R(c, x + bw - 18, STREET_TOP - 26, 12, 26, '#1a1210');
+        awning(c, x + 4, STREET_TOP - 34, bw - 8, rng.pick(['#7a2a3a', '#2a3a6a']), '#e8c08a');
+        signBoard(c, x + bw / 2, STREET_TOP - 44, rng.pick(['MEYHANE', 'PLAK', 'KÜNEFE', 'PASAJ', 'DÖNER']), '#2a1a12', '#f0c040');
+        x += bw + 2;
+      }
+      for (const s of sec.shops) { if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'istanbul'); else vendorBooth(c, s, 'istanbul'); }
+      for (let tx = 60; tx < w; tx += 160) { // tram wires
+        R(c, tx, 40, 1, 14, '#2a2a2a'); R(c, tx - 3, 54, 7, 2, '#2a2a2a');
+      }
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 80, '#6a5a4e');
+      for (let y = 0; y < 80; y += 4) for (let x = (y / 4) % 2 ? 0 : 3; x < w; x += 6) { R(c, x, y, 5, 3, rng.chance(0.5) ? '#7a6a5e' : '#625248'); P(c, x, y + 3, '#4a3a32'); }
+      R(c, 0, 26, w, 2, '#b8b8c8'); R(c, 0, 28, w, 1, '#2a2838');
+      for (let x = 0; x < w; x += 8) R(c, x, 20, 3, 8, '#4a3a32');
+    },
+  },
+
+  ist_boss: {
+    sky: ['#2a6ab0', '#4a8ad0', '#6aa8e0', '#8ac0ea', '#b0d8f6'], sun: [70, 40, 16, '#fff6d0'],
+    far: (c, w, rng) => {
+      R(c, 0, 100, w, 36, '#3a6a9a');
+      for (let x = 0; x < w; x += 2) { const h = 92 - Math.round(9 * Math.sin(x / 40)); R(c, x, h, 2, 44, '#4a6a8a'); }
+      for (let x = 60; x < w; x += 280) { R(c, x - 12, 42, 24, 56, '#b8a898'); disc(c, x, 42, 10, '#a89888', true); R(c, x - 2, 24, 4, 8, '#a89888'); }
+      for (let i = 0; i < 6; i++) gull(c, rng.int(20, w - 20), rng.int(24, 58));
+    },
+    mid: (c, w, rng) => {
+      for (let x = 0; x < w; x += rng.int(30, 50)) { const bw = rng.int(26, 40), h = rng.int(40, 62); R(c, x, 120 - h, bw, h, '#5a4a5a'); windows(c, x, 120 - h, bw, h, rng, '#f0d070', '#2a1e2a', 2, 3, 3, 4, 0.3); }
+    },
+    near: (c, w) => {
+      R(c, 0, STREET_TOP - 16, w, 16, '#8a7a6a');
+      for (let x = 0; x < w; x += 10) R(c, x, STREET_TOP - 30, 2, 15, '#3a3a4a');
+      R(c, 0, STREET_TOP - 31, w, 2, '#3a3a4a');
+      R(c, 0, STREET_TOP - 29, w, 1, '#8a9aaa');
+      for (let x = 30; x < w; x += 120) { R(c, x, STREET_TOP - 46, 26, 16, '#6a5a4a'); R(c, x + 2, STREET_TOP - 44, 22, 2, '#8a7a6a'); }
+      for (let x = 0; x < w; x += 6) P(c, x, STREET_TOP - 17, '#6a5a4a');
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 80, '#7a6a5e');
+      for (let y = 0; y < 80; y += 6) for (let x = (y / 6) % 2 ? 0 : 5; x < w; x += 10) { R(c, x, y, 9, 5, rng.chance(0.5) ? '#8a7a6e' : '#6e5e52'); }
+      R(c, 0, 0, w, 3, '#a89888');
+    },
+  },
+
+  // ================================================================ TAMPA (afternoon)
+  tpa_boardwalk: {
+    sky: ['#1c74c8', '#2a86d6', '#3a9ae2', '#54b0ea', '#74c6f0', '#9cd8f6', '#c2e8fa'], sun: [322, 36, 16, '#fff6d0'],
+    far: (c, w, rng) => {
+      // the gulf: deep blue at the horizon, turquoise closer in
+      sea(c, w, 92, 138, ['#1e6fa8', '#2a7fb4', '#2f8fbe', '#3aa2c8', '#4cb6d2'], 322, '#fff2c0', rng);
+      R(c, 0, 92, w, 1, '#bfe6f2');
+      // sailboats on the horizon
+      for (let bx = 60; bx < w; bx += 210) {
+        R(c, bx, 102, 12, 2, '#f6f6f0'); R(c, bx + 5, 94, 1, 9, '#e8e8e0');
+        R(c, bx + 6, 95, 5, 6, '#fbfbf6'); R(c, bx + 1, 96, 4, 5, '#f2f2ea');
+        R(c, bx - 2, 105, 16, 1, '#cfe8f2');
+      }
+      // a far pier with a ferris wheel
+      for (let px = 40; px < w; px += 480) {
+        R(c, px, 88, 120, 3, '#c9b394');
+        for (let x = 4; x < 120; x += 14) R(c, px + x, 91, 2, 8, '#a89070');
+        disc(c, px + 96, 76, 13, '#e8e2d0'); disc(c, px + 96, 76, 11, '#f6f2e6');
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          P(c, px + 96 + Math.round(Math.cos(a) * 11), 76 + Math.round(Math.sin(a) * 11), '#c9b394');
+          P(c, px + 96 + Math.round(Math.cos(a) * 6), 76 + Math.round(Math.sin(a) * 6), '#c9b394');
+        }
+        R(c, px + 92, 88, 2, 4, '#a89070'); R(c, px + 100, 88, 2, 4, '#a89070');
+      }
+      clouds(c, w, rng, 24, 56, '#a8d8f2', '#e6f6ff', '#8ac4e6');
+      for (let i = 0; i < 6; i++) gull(c, rng.int(10, w - 10), rng.int(28, 70));
+    },
+    mid: (c, w, rng) => {
+      // palm line and beach furniture along the sand
+      for (let x = 6; x < w; x += rng.int(38, 58)) palm(c, x, 126, rng.int(40, 58), '#8a6a4a', '#2a7a3a', '#4aa050');
+      for (let x = 40; x < w; x += 120) {
+        // beach umbrella + towel
+        R(c, x, 110, 1, 16, '#c8c8c8');
+        for (let k = 0; k < 5; k++) R(c, x - 9 + k * 4, 106 + (k % 2), 4, 4, k % 2 ? '#f6e8d8' : '#e05a4a');
+        R(c, x - 10, 106, 21, 2, '#f6e8d8');
+        R(c, x + 4, 122, 12, 3, rng.pick(['#4aa0d8', '#f0c850', '#e06a8a']));
+      }
+      // lifeguard tower
+      for (let x = 180; x < w; x += 520) {
+        R(c, x, 74, 26, 32, '#f6f4ee'); R(c, x, 74, 26, 4, '#e05a4a');
+        R(c, x - 4, 68, 34, 6, '#dcd8cc'); R(c, x + 6, 78, 14, 9, '#4a7a9a');
+        R(c, x - 2, 106, 4, 20, '#c8c4b8'); R(c, x + 24, 106, 4, 20, '#c8c4b8');
+        R(c, x + 30, 54, 2, 20, '#8a8a90'); R(c, x + 32, 54, 8, 5, '#e0303c');
+      }
+      for (let i = 0; i < 4; i++) { const x = rng.int(20, w - 20); R(c, x, rng.int(22, 58), 26, 5, '#f6fbff'); R(c, x + 6, rng.int(18, 54), 14, 5, '#f6fbff'); }
+    },
+    near: (c, w, rng, sec) => {
+      const walls = ['#f4ddc9', '#cbe9da', '#dcd4ea', '#f8ecc4', '#f2d2c0'];
+      let x = 0;
+      while (x < w) {
+        const bw = rng.int(64, 96), top = rng.int(58, 84);
+        const wall = rng.pick(walls);
+        R(c, x, top, bw, STREET_TOP - top, wall);
+        R(c, x, top, bw, 3, '#8a7a6a');
+        R(c, x, top - 4, bw, 4, '#6a5a4a');
+        for (let i = 0; i < bw; i += 4) P(c, x + i, top - 3, '#8a7a6a');
+        // pastel siding + shutters
+        for (let y = top + 6; y < STREET_TOP - 32; y += 4) R(c, x + 2, y, bw - 4, 1, '#00000010');
+        for (let wy = top + 8; wy < top + 36; wy += 12)
+          for (let wx = x + 6; wx < x + bw - 12; wx += 14) {
+            R(c, wx - 1, wy - 1, 10, 12, '#8a7a6a');
+            R(c, wx, wy, 8, 10, rng.chance(0.5) ? '#7ab8d8' : '#3a5a6a');
+            R(c, wx, wy, 8, 1, '#b8e2f2');
+            P(c, wx + 4, wy + 1, '#e8f6ff');
+          }
+        // shop front: big window, striped awning, doorway
+        R(c, x + 4, STREET_TOP - 30, bw - 8, 30, '#8a7a6a');
+        R(c, x + 7, STREET_TOP - 27, bw - 34, 21, '#2a4a58');
+        R(c, x + 8, STREET_TOP - 26, bw - 36, 19, '#9ad0e8');
+        R(c, x + 8, STREET_TOP - 26, bw - 36, 2, '#c8ecf6');
+        for (let i = 0; i < 3; i++) P(c, x + 12 + i * 8, STREET_TOP - 22, '#f6fbff');
+        R(c, x + bw - 20, STREET_TOP - 28, 15, 28, '#6a5a4a');
+        R(c, x + bw - 18, STREET_TOP - 26, 11, 26, '#2a3a48');
+        awning(c, x + 4, STREET_TOP - 36, bw - 26, rng.pick(['#3a8ac0', '#e05a3a', '#3aa06a']), '#f6f6f2');
+        signBoard(c, x + bw / 2, STREET_TOP - 46, rng.pick(['SURF', 'CUBANOS', 'BIKES', 'ICE CREAM', 'SHELLS']), '#f6e8b8', '#3a5a8a');
+        // surfboards leaning on the wall and a planter
+        R(c, x + bw - 46, STREET_TOP - 22, 4, 22, '#e05a4a'); R(c, x + bw - 49, STREET_TOP - 26, 10, 5, '#f6f2e6');
+        P(c, x + bw - 44, STREET_TOP - 14, '#f6f2e6');
+        R(c, x + 3, STREET_TOP - 6, 10, 6, '#8a5a3a'); R(c, x + 4, STREET_TOP - 8, 8, 3, '#4aa050');
+        x += bw + rng.int(1, 4);
+      }
+      for (const s of sec.shops) { if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'tampa'); else vendorBooth(c, s, 'tampa'); }
+      // low wooden railing at the back of the boardwalk
+      R(c, 0, STREET_TOP - 10, w, 2, '#8a6a4a');
+      for (let x2 = 0; x2 < w; x2 += 14) R(c, x2, STREET_TOP - 14, 2, 6, '#8a6a4a');
+    },
+    floor: (c, w, rng) => {
+      // weathered boardwalk planks running along the walk
+      R(c, 0, 0, w, 80, '#c2a172');
+      for (let y = 0; y < 80; y += 7) {
+        R(c, 0, y, w, 6, rng.chance(0.5) ? '#cdac7c' : '#bd9c6e');
+        R(c, 0, y, w, 1, '#dcc094');
+        R(c, 0, y + 6, w, 1, '#8a6c46');
+        for (let x = (y / 7) % 2 ? 0 : 18; x < w; x += 36) {
+          R(c, x, y, 1, 6, '#9c7c50');
+          P(c, x + 2, y + 2, '#8a6c46'); P(c, x + 2, y + 4, '#8a6c46');
+        }
+      }
+      R(c, 0, 0, w, 2, '#e0c69c');
+      for (let i = 0; i < w / 4; i++) P(c, rng.int(0, w), rng.int(2, 78), rng.chance(0.5) ? '#b0905f' : '#d8bc90');
+      for (let x = 30; x < w; x += 240) R(c, x, 30, 26, 2, '#e8dcc0');
+    },
+  },
+
+  tpa_ybor: {
+    sky: ['#3a8ad8', '#5aa0e0', '#7ab8ea', '#a0d0f2'],
+    far: (c, w, rng) => {
+      R(c, 0, 104, w, 32, '#4a8ac0');
+      for (let x = 0; x < w; x += rng.int(20, 38)) { const h = rng.int(20, 44); R(c, x, 120 - h, rng.int(14, 24), h + 12, '#8ab8d8'); }
+      for (let i = 0; i < 4; i++) { const x = rng.int(0, w); R(c, x, 24 + i * 8, 26, 5, '#f6fbff'); R(c, x + 6, 20 + i * 8, 14, 5, '#f6fbff'); }
+    },
+    mid: (c, w, rng) => {
+      for (let x = 8; x < w; x += 54) palm(c, x, 124, rng.int(40, 54), '#8a6a4a', '#3aa04a', '#5ac05a');
+    },
+    near: (c, w, rng, sec) => {
+      // Ybor brick strip with neon signs
+      let x = 0;
+      while (x < w) {
+        const bw = rng.int(58, 88), top = rng.int(54, 78);
+        R(c, x, top, bw, STREET_TOP - top, rng.pick(['#8a3a2a', '#9a4a32', '#7a3428']));
+        R(c, x, top, bw, 2, '#3a1a12');
+        cornice(c, x, top, bw, '#3a1a12', '#b86a4a');
+        windows(c, x + 4, top + 6, bw - 8, 36, rng, '#f0c860', '#2a1a18', 3, 5, 5, 6, 0.35, '#2a1612');
+        R(c, x + 4, STREET_TOP - 30, bw - 8, 30, '#2a1a18');
+        R(c, x + 8, STREET_TOP - 26, bw - 34, 20, '#4a7a9a');
+        R(c, x + 9, STREET_TOP - 25, bw - 36, 18, '#9ad0e8');
+        R(c, x + bw - 18, STREET_TOP - 28, 12, 28, '#1a1210');
+        awning(c, x + 4, STREET_TOP - 36, bw - 8, rng.pick(['#e05a3a', '#3a8ac0', '#e0a020']), '#f6f6f2');
+        signBoard(c, x + bw / 2, STREET_TOP - 46, rng.pick(['CIGARS', 'TAPAS', 'RADIO', 'BAR', 'CAFÉ']), '#1a1012', rng.pick(['#f0d838', '#f06a8a', '#5ae8c0']));
+        x += bw + 2;
+      }
+      for (const s of sec.shops) { if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'tampa'); else vendorBooth(c, s, 'tampa'); }
+      for (let x2 = 0; x2 < w; x2 += 16) { R(c, x2, STREET_TOP - 6, 3, 6, '#8a6a4a'); }
+    },
+    floor: (c, w, rng) => {
+      R(c, 0, 0, w, 80, '#8a8478');
+      for (let y = 0; y < 80; y += 16) for (let x = (y / 16) % 2 ? 0 : 16; x < w; x += 32) R(c, x, y, 31, 15, rng.chance(0.5) ? '#9a9488' : '#7a7468');
+      R(c, 0, 0, w, 3, '#b8b2a6');
+    },
+  },
+
+  tpa_boss: {
+    sky: ['#3a8ad8', '#5aa0e0', '#7ab8ea', '#a0d0f2', '#c8e8fa'], sun: [300, 50, 20, '#fff6c0'],
+    far: (c, w, rng) => {
+      R(c, 0, 100, w, 36, '#2a7ab8');
+      for (let i = 0; i < w / 2; i++) R(c, rng.int(0, w), rng.int(102, 132), rng.int(2, 7), 1, '#5aa8d8');
+      for (let i = 0; i < 6; i++) { const x = rng.int(20, w - 20); R(c, x, rng.int(24, 60), 26, 4, '#f6fbff'); R(c, x + 6, rng.int(20, 56), 14, 4, '#f6fbff'); }
+      for (let x = 40; x < w; x += 90) palm(c, x, 128, rng.int(38, 52), '#8a6a4a', '#3aa04a', '#5ac05a');
+    },
+    mid: (c, w, _rng) => {
+      R(c, 0, 116, w, 20, '#2a5a7a');
+      for (let x = 0; x < w; x += 3) P(c, x, 118 + (x % 5), '#3a7a9a');
+      for (let x = 100; x < w; x += 300) { R(c, x, 68, 8, 48, '#8a6a4a'); R(c, x - 4, 64, 16, 4, '#5a3a2a'); }
+    },
+    near: (c, w) => {
+      R(c, 0, STREET_TOP - 8, w, 8, '#8a6a4a');
+      for (let x = 20; x < w; x += 60) { R(c, x, STREET_TOP - 22, 3, 14, '#6a4a2a'); R(c, x - 3, STREET_TOP - 24, 9, 3, '#6a4a2a'); }
+      R(c, 0, STREET_TOP - 9, w, 2, '#6a4a2a');
+      for (let x = 0; x < w; x += 8) R(c, x, STREET_TOP - 4, 4, 4, '#a8825a');
+    },
+    floor: (c, w, _rng) => {
+      R(c, 0, 0, w, 80, '#a8885a');
+      for (let y = 0; y < 80; y += 6) { R(c, 0, y, w, 1, '#6a4a2a'); for (let x = (y / 6) % 2 ? 0 : 12; x < w; x += 24) R(c, x, y, 1, 6, '#8a6a3a'); }
+      for (let x = 0; x < w; x += 40) R(c, x, 30, 40, 1, '#c8a870');
+      R(c, 0, 0, w, 3, '#c8a870');
+    },
   },
 };
 
 export function buildBackground(theme: string, sec: SectionDef, seed: number): BgLayers {
-  const t = THEMES[theme] ?? THEMES.ist_market;
+  const t = THEMES[theme] ?? THEMES.ny_street;
   const rng = new Rng(seed);
   const len = Math.max(sec.length, SCREEN_W);
   const farF = 0.15, midF = 0.45, fgF = 1.3;
-  const [sk, skc] = canvas(SCREEN_W, STREET_TOP); sky(skc, t.sky, STREET_TOP, t.stars ?? 0, rng);
-  if (t.sun) { const [x, y, r, col] = t.sun; disc(skc, x, y, r, col); disc(skc, x, y, r - 3, '#fffbe8'); }
+  const [sk, skc] = canvas(SCREEN_W, STREET_TOP);
+  sky(skc, t.sky, STREET_TOP, t.stars ?? 0, rng);
+  if (t.sun) glowDisc(skc, t.sun[0], t.sun[1], t.sun[2], t.sun[3], t.sun[3]);
   const [far, fc] = canvas(SCREEN_W + (len - SCREEN_W) * farF + 2, STREET_TOP); t.far(fc, far.width, rng);
   const [mid, mc] = canvas(SCREEN_W + (len - SCREEN_W) * midF + 2, STREET_TOP); t.mid(mc, mid.width, rng);
-  const [near, nc] = canvas(len, STREET_TOP); t.facade(nc, len, rng, sec);
+  const [near, nc] = canvas(len, STREET_TOP); t.near(nc, len, rng, sec);
   const [floor, flc] = canvas(len, SCREEN_H - STREET_TOP); t.floor(flc, len, rng);
   const [fg, fgc] = canvas(SCREEN_W + (len - SCREEN_W) * fgF + 2, SCREEN_H);
-  if (t.fg) t.fg(fgc, fg.width, rng);
+  void fgc;
   return { sky: sk, far, mid, near, floor, fg, farF, midF, fgF };
 }

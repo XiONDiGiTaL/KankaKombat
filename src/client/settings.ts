@@ -2,26 +2,31 @@
 // access is guarded: blocked storage just means settings do not persist.
 
 import { BRANDING } from '../shared/config/branding';
+import { FIGHTER_IDS, FighterId } from '../shared/data/fighters';
 
 export interface Settings {
   music: number;
   sfx: number;
   muted: boolean;
   name: string;
-  fighter: 'bt' | 'sc';
+  fighter: FighterId;
   keys?: Record<string, string[]>;
   touch?: 'auto' | 'on' | 'off';
   shake: boolean;
+  crt: boolean;
+  lang?: 'en' | 'tr';
 }
 
 const KEY = BRANDING.storagePrefix + '.settings.v1';
-const DEFAULTS: Settings = { music: 0.55, sfx: 0.8, muted: false, name: '', fighter: 'bt', touch: 'auto', shake: true };
+const DEFAULTS: Settings = { music: 0.55, sfx: 0.8, muted: false, name: '', fighter: 'bt', touch: 'auto', shake: true, crt: true };
 
 let cache: Settings | null = null;
 
 export function loadSettings(): Settings {
   if (cache) return cache;
   try { cache = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') }; } catch { cache = { ...DEFAULTS }; }
+  // a save from before the roster change may name a fighter that no longer exists
+  if (!(FIGHTER_IDS as readonly string[]).includes(cache!.fighter)) cache!.fighter = DEFAULTS.fighter;
   return cache!;
 }
 

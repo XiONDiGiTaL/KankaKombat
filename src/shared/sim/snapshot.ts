@@ -12,7 +12,7 @@ import { GamePhase, SimEvent, St, STATES } from './types';
 
 export const DEFS: string[] = [...FIGHTER_IDS, ...Object.keys(ENEMIES)];
 export const ATK_IDS: string[] = Object.keys(ATTACKS);
-export const PROP_KINDS = ['crate', 'barrel', 'bin', 'cooler'];
+export const PROP_KINDS = ['crate', 'barrel', 'bin', 'box', 'mailbox'];
 export const HAZARD_KINDS = ['tram', 'bike', 'taxi', 'golfcart'];
 const PHASES: GamePhase[] = ['lobby', 'intro', 'play', 'clear', 'bossintro', 'boss', 'bossdown', 'chapterclear', 'gameover', 'final', 'victory'];
 
@@ -27,7 +27,7 @@ export interface ViewPlayer {
   bag: ItemId[]; sel: number; lvl: number; xp: number; xpNext: number; speedT: number; powerT: number; conn: boolean;
 }
 export interface ViewPickup { id: number; kind: 'coin' | 'food'; item: ItemId | null; x: number; y: number; z: number }
-export interface ViewProp { id: number; kind: string; x: number; z: number; broken: boolean; brokeT: number }
+export interface ViewProp { id: number; kind: string; x: number; z: number; hp: number; maxHp: number; broken: boolean; brokeT: number }
 export interface ViewProj { id: number; kind: string; x: number; y: number; z: number }
 export interface ViewHazard { kind: string; state: number; x: number; dir: number; z0: number; z1: number }
 export interface View {
@@ -60,7 +60,7 @@ export function encode(sim: Sim, events: SimEvent[]): Snap {
     ]),
     p: sim.players().map((p) => [p.id, p.slot, p.pid, p.name, p.def, p.lives, p.money, p.bag.map((i) => ITEM_IDS.indexOf(i)).join(','), p.sel, p.lvl, p.xp, xpToNext(p.lvl), p.speedT, p.powerT, p.connected ? 1 : 0]),
     pk: sim.pickups.map((p) => [p.id, p.kind === 'coin' ? 0 : 1, p.item ? ITEM_IDS.indexOf(p.item) : -1, r1(p.x), r1(p.y), r1(p.z)]),
-    pr: sim.props.map((p) => [p.id, PROP_KINDS.indexOf(p.kind), p.x, p.z, p.broken ? 1 : 0, p.brokeT]),
+    pr: sim.props.map((p) => [p.id, PROP_KINDS.indexOf(p.kind), p.x, p.z, p.broken ? 1 : 0, p.brokeT, p.hp]),
     pj: sim.projs.map((p) => [p.id, p.kind === 'lokma' ? 0 : 1, r1(p.x), r1(p.y), r1(p.z)]),
     hz: sim.hazards.map((h) => [HAZARD_KINDS.indexOf(h.kind), h.state, r1(h.x), h.dir, h.z0, h.z1]),
     ev: events,
@@ -81,7 +81,7 @@ export function decode(s: Snap): View {
       speedT: a[12] as number, powerT: a[13] as number, conn: a[14] === 1,
     })),
     pickups: s.pk.map((a) => ({ id: a[0], kind: a[1] === 0 ? 'coin' : 'food', item: a[2] >= 0 ? ITEM_IDS[a[2]] : null, x: a[3], y: a[4], z: a[5] })),
-    props: s.pr.map((a) => ({ id: a[0], kind: PROP_KINDS[a[1]], x: a[2], z: a[3], broken: a[4] === 1, brokeT: a[5] })),
+    props: s.pr.map((a) => ({ id: a[0], kind: PROP_KINDS[a[1]] ?? 'crate', x: a[2], z: a[3], broken: a[4] === 1, brokeT: a[5], hp: a[6] ?? 1, maxHp: 3 })),
     projs: s.pj.map((a) => ({ id: a[0], kind: a[1] === 0 ? 'lokma' : 'orange', x: a[2], y: a[3], z: a[4] })),
     hazards: s.hz.map((a) => ({ kind: HAZARD_KINDS[a[0]], state: a[1], x: a[2], dir: a[3], z0: a[4], z1: a[5] })),
     events: s.ev ?? [],
