@@ -6,7 +6,8 @@ _Updated 2026-10-22._
 
 - Deterministic 60 Hz simulation, rollback-friendly snapshots, combo/grab/throw/juggle
   systems, dodge i-frames, armour, stun, boss phases and purses.
-- Two playable heroes (B.T. / S.C.), four chapters (NYC, İzmir, İstanbul, Tampa),
+- Two starter heroes (B.T. / S.C.) and two secret fighters (Ozzi / Aynur, revealed
+  with UP on a fighter card), four chapters (NYC, İzmir, İstanbul, Tampa),
   sixteen sections, four bosses, hazards, waves, camera locks and GO gating. MUSE is a
   reference sheet only as a fighter; she only appears as a pedestrian. Each chapter is
   now street → peaceful plaza → street → boss arena, so the campaign breathes instead
@@ -24,10 +25,44 @@ _Updated 2026-10-22._
   flood fill that also accepts low-chroma grey, closes hairline outline gaps so the
   fill cannot leak into white sleeves, keeps each sheet row's own baseline so the
   foot lift inside a walk survives, anchors standing poses on the planted foot and
-  lying poses on the silhouette centre, and sizes the atlas cell (83×73 / 82×73) to
-  the widest and tallest pose so nothing clips. The HUD head box is measured from the
+  lying poses on the silhouette centre, and sizes the atlas cell to the widest and
+  tallest pose so nothing clips. The HUD head box is measured from the
   idle silhouette instead of hard-coded. `tools/sprites/build.ts` skips characters
   listed in `tools/sprites/imported.json`, so the procedural pass never overwrites them.
+- **Two hidden fighters, revealed from the fighter cards** — Ozzi hides behind S.C. and
+  Aynur behind B.T.; UP on a highlighted card swaps its sprite, name, blurb and stat
+  sheet for the secret, and the card keeps the reveal for the session until it is
+  confirmed. The four fighters each own exactly one maxed stat, so no two read as the
+  same character: B.T. speed 5, S.C. power 5, Ozzi toughness 5, Aynur grapple 5, with
+  the rest of each bar balanced around its role. Ozzi is the tank — 120 HP, 1.22 damage
+  divisor (146 effective HP, just past S.C.'s 144), power 3, speed 4, a long-reach three-hit
+  chain and the quickest dodge in the roster. S.C. keeps max power and a 4 grapple:
+  her hold is 150 ticks (was 170), shorter than both grapple specialists, while her
+  22-damage throw is still the hardest. Aynur is the hold specialist: the longest grab
+  reach (32 px to B.T.'s 26), the longest hold (240 ticks), a five-slap grab combo
+  (`grabHits` on the fighter def, consumed by `heldAction` in combat) and soft normals.
+  Her throw is a 17-damage repositioning tool; four 6-damage slaps plus an 18-damage
+  finisher (42 total) makes finishing the string the payoff over cashing out early. The
+  victim stays `held` — immobilised — through the whole combo and the fifth slap drops them. Both pages are
+  imported by `tools/art/import_sheets.py` (Ozzi's is eight columns, walking on row 0
+  and running on row 1; Aynur's is ten columns by four rows, and her knockdown poses
+  touch across the grid, so those cells get a seam cut on import) and need no walk
+  strip; `tools/sprites/build.ts` now keeps imported sheets in
+  `index.json` even though they are not in the procedural roster. Aynur's page is the
+  brown-top, leopard-legging, pug-bag design; the idle, stride, palm/jab, flinch,
+  knockdown, recovery and victory rows all come from that one sheet.
+- **Grabs work in the clinch** — every fighter has a `grabRange` now (B.T. 26, S.C. 28,
+  Ozzi 30, Aynur 32), a target whose centre is up to 4 px behind the facing is accepted
+  so walking into an enemy no longer puts it "too close" to grab, and the grappler turns
+  into the clinch when it does. The grab is a nine-tick active window with a small
+  step-in, not a one-frame check, so a press made just before an enemy walks into reach
+  still catches him, and the lane tolerance is 11 px. A whiff plays its swing instead of
+  going silent. A GRAB pressed during attack recovery is buffered for 20 ticks, and a
+  LIGHT, HEAVY or GRAB pressed before the clinch closes is honoured in the hold — the
+  second mash becomes the slap or throw rather than vanishing. The grapple tooltip
+  quotes the reach with the hold and slap count. The client tags an enemy in reach with a
+  steady GRAB prompt, and the held victim with THROW, using `grabReadiness.ts` so the tag
+  follows the same range, lane and state rules as `tryGrab`.
 - **Hand-drawn walk strips replace every walk and run row** (`assets/source/walk/*.png`,
   four frames each, spliced in by the same importer). Each strip is cut as four blobs,
   scaled so the walker stands exactly as tall as the same figure on his page (measured
@@ -64,6 +99,15 @@ _Updated 2026-10-22._
   included; every DOM screen and canvas label uses them (no system font).
 - HUD portraits, colour-tier health, critical pulse, boss bar, stage banners,
   GAME OVER / CONTINUE 9→0, chapter-clear summary.
+- **Per-player combo counters** — every player's landed hits chain into a counter under
+  their own HUD panel (`P1 COMBO: 7` / `P2 COMBO: 3`) in that player's slot colour
+  (P1 red, P2 blue), set in the chunky TITLE face and flashed white on each hit. The
+  chain lasts one second after the last landed hit and fades out over its final 18
+  ticks; taking a damaging hit deletes it at once, while blocked hits, zero-damage pokes
+  and sourceless hazard hits do not extend it.
+  It is client-side and cosmetic (`src/client/render/combo.ts` tracks the hit events,
+  `Renderer` draws the plate), so solo and online co-op show the same counter from the
+  existing snapshots with no protocol change.
 - **Three-state destructibles drawn from the break-state sheet**: metal trash can,
   plank crate, taped cardboard box, hooped wooden barrel and street mailbox, each with
   its own intact, damaged and smashed map (roughly half to two thirds of a 60 px
@@ -96,6 +140,25 @@ _Updated 2026-10-22._
   d-pad or either stick moves focus through the menus. Arrows, both sticks, every face
   button, both bumpers, both triggers and Start are covered by `tests/input.test.ts` and by
   a browser check that stubs the Gamepad API.
+- **Controller rumble** — simulation hit events now carry their attacker (`src`) and an
+  environmental `hazard` flag, so the client can buzz only hits that involve the local
+  player: landed jabs/heavies, blocked chip, taking a hit, grabs (grabber or held),
+  throws and being thrown, and a max-strength 340 ms burst for trams, taxis, bikes, golf
+  carts and delivery bikes. Effects are ordered by weight in `src/client/input/rumble.ts`
+  (55–340 ms, 0.06–1.0 motor strength), dispatched as `dual-rumble` to every pad with a
+  `vibrationActuator`, and gated to one burst per 25 ms so multi-hit moves cannot stack
+  motors; missing actuators, insecure contexts and rejected `playEffect` promises are
+  ignored. `SETTINGS -> CONTROLLER RUMBLE` (on by default) turns it off, and
+  `tests/rumble.test.ts` plus two sim-event tests pin the classification and dispatch.
+- **A control card on the first street** — when a run reaches Flatbush (chapter 1,
+  section 1) a bordered card at the bottom of the play area lists every action with the
+  player's *current* keyboard binding in one column and the fixed pad button in the
+  other, so remapped keys (a dodge on SHIFT, a light on J) are what the card prints;
+  Enter and its numpad twin collapse to one label and a cleared binding drops its row
+  instead of printing an empty column. It holds for ~9.5 s and fades over the last
+  1.5 s on its own 60 Hz clock, so pausing freezes it; drawn in the HUD font from
+  `Input.keys` by `src/client/render/controllegend.ts`, covered by
+  `tests/controls.test.ts`.
 - **Painted stage strips back every street** — the supplied concept scenes are imported
   as one scrolling strip per district (`tools/art/import_stages.py`, `npm run stages` →
   `public/assets/stages/<id>.png|json`) and drawn 1:1 behind the fighters, so a street is
@@ -168,6 +231,12 @@ _Updated 2026-10-22._
   the same track width and a segmented empty track. The cards show the in-game sprite on a
   dusk backdrop, sized from its own opaque bounds: both cards use one whole-pixel scale and
   one floor line, so the two stand at matching size and nothing is cropped.
+- Every stat bar is a hover / focus / tap target with a tooltip that says what it changes
+  in play, quoting the fighter's own numbers from the data it reads: heavy damage and
+  throw, run and walk pace, hold in seconds and slap count, health and the share of each
+  hit taken. The tip is placed above the bars, and slides beside them over the portrait
+  when a taller card would otherwise clip the fighter's name; a tap pins it, a second tap,
+  Esc, a scroll or a tap elsewhere puts it away. English and Turkish.
 - Stage dressing from the concept maps: the İzmir **Saat Kulesi** with mosque and ferry,
   İstanbul's domed skyline and pencil minarets over the market roofs, the NYC bodega /
   subway / water-tower block at night, and Tampa's lifeguard tower and pier. Shop

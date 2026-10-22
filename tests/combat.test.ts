@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { arena, enemy, run, press, until, BTN } from './helpers';
 import { ATTACKS } from '../src/shared/data/attacks';
+import { FIGHTERS } from '../src/shared/data/fighters';
 import { hittable } from '../src/shared/sim/combat';
 import { PROP_HP } from '../src/shared/data/stages';
 
@@ -70,6 +71,9 @@ describe('combat', () => {
     expect(p.st).toBe('grab'); // whiff
     expect(far.heldBy).toBe(-1);
     run(sim, 20);
+    // take the far bum out before the facing check: the grab stays active for a few ticks
+    // now, and he could otherwise walk into that window and be caught from the front
+    far.removed = true;
     const e = enemy(sim, 'bum', p.x - 18, p.z);
     press(sim, 'p0', BTN.GRAB); // facing the wrong way
     expect(e.heldBy).toBe(-1);
@@ -86,6 +90,81 @@ describe('combat', () => {
     expect(e.heldBy).toBe(-1);
     expect(p.hold).toBe(-1);
     expect(['knock', 'down', 'getup', 'dead']).toContain(e.st);
+  });
+
+  it('grabs at point-blank and at each fighter\'s own reach', () => {
+    const grabAt = (f: 'bt' | 'aynur', dx: number) => {
+      const { sim, ps: [p] } = arena([f]);
+      const e = enemy(sim, 'bum', p.x + dx, p.z);
+      press(sim, 'p0', BTN.GRAB);
+      return { sim, p, e };
+    };
+    // Players and enemies have no body collision, so walking into an enemy can put its
+    // centre on top of the player. That clinch has to grab instead of falling through.
+    const pointBlank = grabAt('aynur', 0);
+    expect(pointBlank.p.st).toBe('hold');
+    expect(pointBlank.e.heldBy).toBe(pointBlank.p.id);
+    // Aynur's grapple bar buys her the longest reach in the roster.
+    const atReach = grabAt('aynur', FIGHTERS.aynur.grabRange);
+    expect(atReach.p.st).toBe('hold');
+    expect(atReach.e.heldBy).toBe(atReach.p.id);
+    expect(grabAt('aynur', FIGHTERS.aynur.grabRange + 1).p.st).toBe('grab');
+    expect(grabAt('bt', FIGHTERS.aynur.grabRange).p.st).toBe('grab');
+    // A target caught in the overlap fringe turns the grappler into the clinch.
+    const fringe = grabAt('aynur', -3);
+    expect(fringe.p.st).toBe('hold');
+    expect(fringe.p.face).toBe(-1);
+    // Still no reaching through the player's back.
+    expect(grabAt('aynur', -5).p.st).toBe('grab');
+  });
+
+  it('holds the grab open so an enemy stepping into reach is caught', () => {
+    const { sim, ps: [p] } = arena(['aynur']);
+    // pressed a few pixels before the bum's walk brings him inside Aynur's reach
+    const e = enemy(sim, 'bum', p.x + FIGHTERS.aynur.grabRange + 7, p.z);
+    press(sim, 'p0', BTN.GRAB);
+    expect(p.st).toBe('grab');
+    until(sim, () => p.st === 'hold', 12);
+    expect(e.heldBy).toBe(p.id);
+  });
+
+  it('accepts a target slightly off the player\'s lane', () => {
+    const { sim, ps: [p] } = arena(['aynur']);
+    const e = enemy(sim, 'bum', p.x + 18, p.z + 10);
+    press(sim, 'p0', BTN.GRAB);
+    expect(p.st).toBe('hold');
+    expect(e.heldBy).toBe(p.id);
+  });
+
+  it('turns a grab mashed before the clinch closed into the throw', () => {
+    const { sim, ps: [p] } = arena(['aynur']);
+    const e = enemy(sim, 'bum', p.x + FIGHTERS.aynur.grabRange + 7, p.z);
+    press(sim, 'p0', BTN.GRAB);
+    run(sim, 1);
+    press(sim, 'p0', BTN.GRAB); // pressed while the grab window is still reaching
+    until(sim, () => e.st === 'thrown', 40);
+    expect(p.hold).toBe(-1);
+    expect(e.heldBy).toBe(-1);
+  });
+
+  it('answers a grab that finds nobody with a whiff', () => {
+    const { sim, ps: [p] } = arena(['aynur']);
+    sim.events = [];
+    press(sim, 'p0', BTN.GRAB);
+    expect(p.st).toBe('grab');
+    expect(sim.events.some((ev) => ev.k === 'whiff' && ev.id === p.id)).toBe(true);
+  });
+
+  it('buffers a grab pressed during an attack so it comes out on recovery', () => {
+    const { sim, ps: [p] } = arena(['aynur']);
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
+    press(sim, 'p0', BTN.LIGHT);
+    run(sim, 4);
+    expect(p.st).toBe('attack');
+    press(sim, 'p0', BTN.GRAB);
+    until(sim, () => p.st === 'hold', 40);
+    expect(e.heldBy).toBe(p.id);
+    expect(p.hold).toBe(e.id);
   });
 
   it('throw releases the victim, deals landing damage and bowls over others', () => {
@@ -180,6 +259,76 @@ describe('combat', () => {
       expect(a.recovery, id).toBeGreaterThanOrEqual(0);
       expect(a.box[0] <= a.box[1], id).toBe(true);
       if (a.next) expect(ATTACKS[a.next], id).toBeDefined();
+    }
+  });
+});
+
+describe('Aynur\'s hold', () => {
+  it('keeps the victim locked for five slaps and drops them on the fifth', () => {
+    const { sim, ps: [p] } = arena(['aynur']);
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
+    e.hp = e.maxHp = 400;
+    press(sim, 'p0', BTN.GRAB);
+    expect(p.st).toBe('hold');
+    expect(e.heldBy).toBe(p.id);
+    const deltas: number[] = [];
+    for (let k = 1; k <= 5; k++) {
+      const before = e.hp;
+      press(sim, 'p0', BTN.LIGHT);
+      run(sim, 20);
+      deltas.push(before - e.hp);
+      if (k < 5) {
+        expect(e.heldBy, `held after slap ${k}`).toBe(p.id);
+        expect(p.hold).toBe(e.id);
+      }
+    }
+    expect(p.holdHits).toBe(5);
+    expect(p.hold).toBe(-1);
+    expect(e.heldBy).toBe(-1);
+    expect(['knock', 'down', 'getup', 'dead']).toContain(e.st);
+    // four set-up slaps, then the heavier finisher that drops them
+    const slap = ATTACKS[FIGHTERS.aynur.grabAtk].damage;
+    const finisher = slap + (FIGHTERS.aynur.grabFinisher ?? 3);
+    expect(deltas).toEqual([slap, slap, slap, slap, finisher]);
+  });
+
+  it('still ends a plain knee hold on the third hit', () => {
+    const { sim, ps: [p] } = arena(['bt']);
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
+    e.hp = e.maxHp = 400;
+    press(sim, 'p0', BTN.GRAB);
+    for (let k = 0; k < 3; k++) { press(sim, 'p0', BTN.LIGHT); run(sim, 25); }
+    expect(p.holdHits).toBe(3);
+    expect(e.heldBy).toBe(-1);
+  });
+});
+
+describe('hit metadata for feedback', () => {
+  it('names the attacker on combat hits so the client can rumble the right pad', () => {
+    const { sim, ps: [p] } = arena();
+    const e = enemy(sim, 'bum', p.x + 18, p.z);
+    sim.events = [];
+    press(sim, 'p0', BTN.LIGHT);
+    run(sim, 10);
+    const hit = sim.events.find((ev) => ev.k === 'hit' && ev.tgt === e.id);
+    expect(hit).toBeTruthy();
+    if (hit?.k === 'hit') {
+      expect(hit.src).toBe(p.id);
+      expect(hit.hazard ?? false).toBe(false);
+    }
+  });
+
+  it('flags environmental (vehicle) damage as a hazard with no attacker', () => {
+    const { sim, ps: [p] } = arena();
+    sim.events = [];
+    sim.hurtBy(p, 6, 4, 3, -1);
+    const hit = sim.events.find((ev) => ev.k === 'hit');
+    expect(hit).toBeTruthy();
+    if (hit?.k === 'hit') {
+      expect(hit.tgt).toBe(p.id);
+      expect(hit.hazard).toBe(true);
+      expect(hit.src).toBe(-1);
+      expect(hit.heavy).toBe(true);
     }
   });
 });

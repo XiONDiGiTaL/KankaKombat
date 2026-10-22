@@ -26,20 +26,29 @@ export function controlPlayer(sim: Sim, p: Ent, inp: InputFrame): void {
   if (!dx || dx !== p.face) p.running = false;
   const running = dx !== 0 && (p.running || (held & BTN.RUN) !== 0);
 
-  // buffer attack presses made during other actions
+  // Buffer action presses made during other actions. A grab pressed while an attack is
+  // still recovering should come out as soon as control returns, not vanish silently.
   if (pr & BTN.LIGHT) { p.buffer = 'L'; p.bufT = 10; }
   else if (pr & BTN.HEAVY) { p.buffer = 'H'; p.bufT = 10; }
+  else if (pr & BTN.GRAB) { p.buffer = 'G'; p.bufT = 20; }
   else if (p.bufT > 0 && --p.bufT === 0) p.buffer = null;
 
   if (p.st === 'held') { if (pr) p.escape += popcount(pr); return void updateCombat(sim, p); }
 
   if (p.st === 'hold') {
-    if (pr & BTN.HEAVY || pr & BTN.GRAB) {
+    // A press made just before the clinch closed (while the grab window was still open)
+    // is still in the buffer; honour it here so mashing grab then heavy throws instead of
+    // silently eating the second press.
+    const throwNow = (pr & (BTN.HEAVY | BTN.GRAB)) || p.buffer === 'H' || p.buffer === 'G';
+    if (throwNow) {
       if (dx && dx !== p.face) p.face = dx as 1 | -1;
-      setState(p, 'throw'); p.atk = 'p_throw'; p.buffer = null;
+      setState(p, 'throw'); p.atk = 'p_throw'; p.buffer = null; p.bufT = 0;
       return;
     }
-    if (pr & BTN.LIGHT) { setState(p, 'grabatk'); p.atk = f.grabAtk; p.buffer = null; return; }
+    if ((pr & BTN.LIGHT) || p.buffer === 'L') {
+      setState(p, 'grabatk'); p.atk = f.grabAtk; p.buffer = null; p.bufT = 0;
+      return;
+    }
     // reposition while holding: slow walk, turning swaps the victim to the other side
     if (dx && dx !== p.face && p.t > 6) p.face = dx as 1 | -1;
     p.vx = dx * f.walk * 0.45; p.vz = dz * f.walkZ * 0.45;
@@ -49,7 +58,7 @@ export function controlPlayer(sim: Sim, p: Ent, inp: InputFrame): void {
 
   if (p.st === 'jump') {
     p.vx = p.vx * 0.98 + dx * 0.04;
-    if (!p.usedAir && p.buffer) {
+    if (!p.usedAir && (p.buffer === 'L' || p.buffer === 'H')) {
       startAttack(sim, p, f.jumpAtk); p.usedAir = true; p.buffer = null;
     }
     return;
@@ -73,10 +82,15 @@ export function controlPlayer(sim: Sim, p: Ent, inp: InputFrame): void {
     p.inv = Math.max(p.inv, f.dodgeInvuln);
     return;
   }
-  if (pr & BTN.GRAB) {
+  if (pr & BTN.GRAB || p.buffer === 'G') {
+    p.buffer = null; p.bufT = 0;
+    if (dx) p.face = dx as 1 | -1;
     if (tryInteract(sim, p)) return;
     if (tryGrab(sim, p)) return;
-    setState(p, 'grab'); p.vx = p.face * 0.6;
+    // Nothing in reach yet: step in and keep the grab active for a few ticks (see
+    // updateCombat), and play the whiff so a press that finds nobody still answers.
+    setState(p, 'grab'); p.vx = p.face * 1.1;
+    sim.emit({ k: 'whiff', id: p.id, heavy: false });
     return;
   }
   if (p.buffer) {

@@ -36,8 +36,19 @@ Cloudflare; the exact records, rule expressions and verification steps are in
 
 ## Features
 
-- **Two heroes** — B.T. (speed and combos) and S.C. (power and grapples) — each with
-  their own combo chain, heavy, air/run attacks, grab, knees and throws.
+- **Two heroes, two secrets** — B.T. (speed and combos) and S.C. (power and grapples),
+  each with their own combo chain, heavy, air/run attacks, grab, knees and throws.
+  Each fighter maxes exactly one stat, so no two share a role: B.T. speed, S.C. power,
+  Ozzi toughness, Aynur grapple. Press **UP** on either card in fighter select to reveal
+  the fighter hiding behind it: **Ozzi** is the tank, with long reach, a three-hit chain
+  and the fastest sidestep in the game; **Aynur** is the hold specialist, her grab
+  reaching farther than anyone's (connecting at point-blank and staying open for a few
+  frames as an enemy steps in) before locking an enemy in place for a five-slap combo
+  that hits harder than throwing early.
+  S.C. still hits hardest but her hold is shorter than either grapple specialist's.
+  Hover a stat bar (or tap it) and the card explains what that stat changes in play,
+  quoting the fighter's own numbers — heavy damage and throw, run and walk pace, grab
+  reach, hold length and slap count, health and damage taken.
 - **Four chapters / seventeen sections** — NY night, İzmir sunset, İstanbul morning,
   Tampa afternoon. Each chapter walks street → peaceful plaza → street → boss arena:
   the fighting streets lock the camera for a wave and blink the GO sign, the plaza is
@@ -59,8 +70,10 @@ Cloudflare; the exact records, rule expressions and verification steps are in
   Tampa Man — with phases, telegraphs, summons and purses.
 - **Bitmap typography** — TITLE and HUD fonts generated from the approved lettering
   sheet, with Ç Ğ İ Ö Ş Ü. No system font is used anywhere in the UI.
-- **HUD** — portrait panels (gold P1 / silver P2), health that drains green → yellow
-  → red and pulses when critical, boss bar, lives, wallet, bag and stage banners.
+- **HUD** — portrait panels (P1 red / P2 blue), health that drains green → yellow
+  → red and pulses when critical, boss bar, lives, wallet, bag, stage banners and a
+  per-player hit combo counter that counts chained hits, fades when the chain drops and
+  ends at once when that player takes a hit.
 - **Destructibles** — bins, crates, boxes, barrels and mailboxes take three hits
   (intact → damaged → smashed), burst into debris and pop stage-flavoured food. Each
   state has its own sprite: the can dented and lidless, the crate cracked, the box
@@ -116,7 +129,11 @@ cancels, on the title card, the main menu, fighter select, pause, the lobby and 
 screen. The pad moves focus with the d-pad or either stick. All keys are remappable in
 **How to Play**; the pad layout is the standard Xbox mapping (A/B/X/Y, bumpers, triggers,
 Back, Start) and is fixed, so the same muscle memory works on every controller. Gamepads,
-keyboard and touch share one input bitmask.
+keyboard and touch share one input bitmask. On the first street a control card shows every
+action with your current keyboard binding beside the pad button, then fades after a few
+seconds — so a remapped key is visible without opening Settings. Hits, grapples and vehicle
+strikes rumble a connected pad with effects weighted by what happened, from a light guard
+chip up to a full-strength tram hit; **SETTINGS -> CONTROLLER RUMBLE** turns it off.
 
 ## Project layout
 

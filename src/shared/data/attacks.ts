@@ -52,6 +52,24 @@ export const ATTACKS: Record<string, AttackDef> = {
   sc_r: A({ anim: 'runatk', startup: 4, active: 12, recovery: 10, damage: 13, box: [0, 24, 8, 42], dz: 10, kb: [5.0, 2.2], hitstun: 24, knockdown: true, hitstop: 7, heavy: true, lunge: 2.6, armor: true }),
   sc_ga: A({ anim: 'grabatk', startup: 6, active: 6, recovery: 7, damage: 8, box: [0, 26, 0, 46], dz: 10, kb: [0, 0], hitstun: 22, stun: 6, heavy: true }),
 
+  // ------------------------------------------------------------- OZZI: long reach, three hits
+  ozzi_l1: A({ anim: 'light1', startup: 3, active: 3, recovery: 6, damage: 5, box: [4, 27, 24, 40], dz: 8, kb: [0.6, 0], hitstun: 14, stun: 6, next: 'ozzi_l2', lunge: 0.6 }),
+  ozzi_l2: A({ anim: 'light2', startup: 3, active: 3, recovery: 6, damage: 5, box: [4, 28, 24, 40], dz: 8, kb: [0.6, 0], hitstun: 14, stun: 6, next: 'ozzi_l3', lunge: 0.6 }),
+  ozzi_l3: A({ anim: 'light3', startup: 5, active: 5, recovery: 11, damage: 9, box: [4, 32, 18, 48], dz: 9, kb: [2.4, 3.4], hitstun: 26, knockdown: true, hitstop: 7, heavy: true, lunge: 0.6 }),
+  ozzi_h: A({ anim: 'heavy', startup: 10, active: 6, recovery: 14, damage: 15, box: [4, 36, 16, 46], dz: 9, kb: [4.2, 2.6], hitstun: 26, knockdown: true, stun: 10, hitstop: 7, heavy: true, lunge: 1.3 }),
+  ozzi_j: A({ anim: 'jumpatk', startup: 3, active: 14, recovery: 6, damage: 10, box: [2, 30, 4, 32], dz: 8, kb: [3.2, 2.0], hitstun: 20, knockdown: true, hitstop: 5, aerial: true }),
+  ozzi_r: A({ anim: 'runatk', startup: 4, active: 10, recovery: 12, damage: 11, box: [0, 32, 10, 36], dz: 9, kb: [4.6, 2.6], hitstun: 22, knockdown: true, hitstop: 6, heavy: true, lunge: 3.0, lift: 1.5 }),
+  ozzi_ga: A({ anim: 'grabatk', startup: 4, active: 5, recovery: 6, damage: 6, box: [0, 26, 0, 46], dz: 10, kb: [0, 0], hitstun: 20, stun: 5 }),
+
+  // ------------------------------------------------------------- AYNUR: hold them, then slap
+  aynur_l1: A({ anim: 'light1', startup: 3, active: 3, recovery: 6, damage: 4, box: [4, 24, 24, 40], dz: 8, kb: [0.6, 0], hitstun: 14, stun: 5, next: 'aynur_l2', lunge: 0.5 }),
+  aynur_l2: A({ anim: 'light2', startup: 3, active: 3, recovery: 7, damage: 5, box: [4, 25, 24, 40], dz: 8, kb: [0.7, 0], hitstun: 14, stun: 5, next: 'aynur_l3', lunge: 0.5 }),
+  aynur_l3: A({ anim: 'light3', startup: 5, active: 4, recovery: 10, damage: 8, box: [4, 28, 18, 40], dz: 8, kb: [2.0, 1.2], hitstun: 22, stun: 8, hitstop: 5 }),
+  aynur_h: A({ anim: 'slap', startup: 8, active: 5, recovery: 12, damage: 12, box: [4, 30, 20, 42], dz: 9, kb: [3.8, 1.6], hitstun: 24, knockdown: true, stun: 10, hitstop: 6, heavy: true, lunge: 0.9 }),
+  aynur_j: A({ anim: 'jumpatk', startup: 4, active: 14, recovery: 6, damage: 9, box: [0, 26, 4, 30], dz: 8, kb: [2.8, 1.8], hitstun: 20, knockdown: true, hitstop: 5, aerial: true }),
+  aynur_r: A({ anim: 'runatk', startup: 4, active: 10, recovery: 14, damage: 9, box: [0, 26, 10, 36], dz: 9, kb: [4.0, 2.2], hitstun: 22, knockdown: true, hitstop: 5, heavy: true, lunge: 2.8 }),
+  aynur_ga: A({ anim: 'slap', startup: 3, active: 4, recovery: 4, damage: 6, box: [0, 26, 0, 46], dz: 10, kb: [0, 0], hitstun: 20, stun: 5, hitstop: 3 }),
+
   p_throw: A({ anim: 'throw', startup: 9, active: 2, recovery: 14, damage: 0, box: [0, 0, 0, 0], dz: 0, kb: [0, 0], hitstun: 0, heavy: true }),
 
   // ------------------------------------------------------------- shared enemy moves

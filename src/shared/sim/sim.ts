@@ -307,7 +307,7 @@ export class Sim {
     e.lastHitBy = src >= 0 ? src : e.lastHitBy;
     e.vx = vx; e.vy = vy; e.y = Math.max(e.y, 1);
     setState(e, 'knock');
-    this.emit({ k: 'hit', x: e.x, y: 24, z: e.z, heavy: true, dmg, tgt: e.id });
+    this.emit({ k: 'hit', x: e.x, y: 24, z: e.z, heavy: true, dmg, tgt: e.id, src, hazard: true });
   }
 
   private updatePhysics(e: Ent): void {
@@ -350,7 +350,7 @@ export class Sim {
           const dmg = thrower && thrower.kind === 'p' ? FIGHTERS[thrower.def as FighterId].throwDamage : 14;
           if (!(this.godMode && e.kind === 'p')) e.hp -= dmg;
           e.lastHitBy = e.thrownBy >= 0 ? e.thrownBy : e.lastHitBy;
-          this.emit({ k: 'hit', x: e.x, y: 4, z: e.z, heavy: true, dmg, tgt: e.id });
+          this.emit({ k: 'hit', x: e.x, y: 4, z: e.z, heavy: true, dmg, tgt: e.id, src: e.thrownBy });
         }
         if (v < -3.2 && e.hp > 0) { e.vy = 1.6; e.y = 0.1; e.vx *= 0.5; this.emit({ k: 'land', id: e.id, heavy: true }); break; }
         e.vx = 0; e.vz = 0; setState(e, e.hp <= 0 ? 'dead' : 'down'); this.emit({ k: 'land', id: e.id, heavy: true });

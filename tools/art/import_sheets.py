@@ -90,6 +90,48 @@ SHEETS = {
     "bt": dict(file="bt_sheet.png", cols=8, pose=poses(), walk="walk/bt.png"),
     "sc": dict(file="sc_sheet.png", cols=8, pose=poses(), walk="walk/sc.png"),  # B.T. is the woman
 
+    # ---------------------------------------------------------------- secret fighters
+    # Ozzi and Aynur are painted on pages of their own, with no walk strips and a
+    # different pose grid: Ozzi walks on row 0 and runs on row 1; Aynur's page has
+    # four rows of ten. Everything else (scale, baseline, packing) is the same import
+    # path as the heroes.
+    "ozzi": dict(file="ozzi_sheet.png", cols=8, pose=poses(
+        idle=[(0, 5), (0, 6), (0, 7), (0, 4)],
+        ready=[(0, 6), (0, 7)],
+        walkrow=0, runrow=1,
+        punch=[(2, 0), (2, 1), (2, 2)],
+        kick=[(2, 5), (2, 6), (3, 4)],
+        heavy=(3, 5),
+        guard=(3, 1),
+        crouch=(5, 6), crouch2=(7, 2), dodge=(4, 3),
+        jump=(5, 3), fall=(5, 4),
+        hurt=[(5, 2), (5, 1), (4, 0)],
+        knock=[(6, 1), (6, 2), (6, 4)],
+        lie=[(6, 5), (5, 7)],
+        getup=[(7, 2), (7, 3), (7, 4), (7, 5)],
+        victory=[(7, 6), (7, 7)],
+        slap=(4, 4),
+    )),
+    "aynur": dict(file="aynur_sheet.png", cols=10, rows=4, seam_rows=[3], pose=poses(
+        idle=[(0, 0), (0, 1), (0, 2), (0, 3)],
+        ready=[(0, 4), (0, 5)],
+        walkrow=1, runrow=1,
+        # the palm strikes and jabs on row 2; the flying, floor and recovery poses on
+        # row 3 supply everything a four-row page has no dedicated frame for
+        punch=[(2, 1), (2, 3), (2, 4)],
+        kick=[(2, 2), (2, 9), (2, 7)],
+        heavy=(2, 9),
+        slap=(2, 8),
+        guard=(2, 5),
+        crouch=(3, 6), crouch2=(3, 5), dodge=(3, 5),
+        jump=(3, 1), fall=(3, 2),
+        hurt=[(3, 0), (3, 1), (3, 2)],
+        knock=[(3, 1), (3, 2), (3, 3)],
+        lie=[(3, 3), (3, 4)],
+        getup=[(3, 5), (3, 6), (0, 0), (0, 1)],
+        victory=[(3, 7), (0, 7)],
+    )),
+
     # ---------------------------------------------------------------- New York bum
     "bum": dict(file="bum_sheet.jpg", cols=10, pose=poses(
         # ten columns per row: the strikes sit further right and the crouch frames
@@ -168,8 +210,8 @@ def tint_boss(img: np.ndarray) -> np.ndarray:
 # --------------------------------------------------------------------- animations
 def anim_set(p: dict, cols: int) -> dict:
     """Every animation the renderer and the attack data can ask for."""
-    walk = [(1, c) for c in range(cols)]
-    run = [(2, c) for c in range(cols)]
+    walk = [(p.get("walkrow", 1), c) for c in range(cols)]
+    run = [(p.get("runrow", 2), c) for c in range(cols)]
     idle = p["idle"]
     hurt = p["hurt"]
     knock = p["knock"]
@@ -236,7 +278,7 @@ def anim_set(p: dict, cols: int) -> dict:
 
     # signature moves of the four concept enemies
     add("haymaker", [(guard, 10, "s"), (p["heavy"], 6, "a"), (idle[0], 12, "r")], False)
-    add("slap", [(guard, 4, "s"), (punch[2], 4, "a"), (idle[0], 8, "r")], False)
+    add("slap", [(guard, 4, "s"), (p.get("slap") or punch[2], 4, "a"), (idle[0], 8, "r")], False)
     add("cane", [(p["cane"][0], 10, "s"), (p["cane"][1], 6, "a"), (idle[0], 12, "r")], False)
     add("poke", [(punch[0], 6, "s"), (punch[1], 6, "a"), (idle[0], 8, "r")], False)
     add("thrust", [(punch[0], 8, "s"), (punch[1], 5, "a"), (idle[0], 10, "r")], False)
@@ -534,11 +576,23 @@ def crisp(frames: list[np.ndarray], colors: int = 28) -> list[np.ndarray]:
     return out
 
 
-def segment(path: str, cols: int, rule_lines: bool = False, rows: int = 8) -> dict[tuple[int, int], tuple[np.ndarray, int, int]]:
-    """Cut the page into (row, col) -> (premultiplied rgba crop, x, y in the page)."""
+def segment(path: str, cols: int, rule_lines: bool = False, rows: int = 8,
+            seam_rows: tuple[int, ...] = ()) -> dict[tuple[int, int], tuple[np.ndarray, int, int]]:
+    """Cut the page into (row, col) -> (premultiplied rgba crop, x, y in the page).
+
+    `seam_rows` are rows whose figures touch across the grid: a 1px vertical cut on
+    each internal cell boundary there keeps two knockdown poses from being claimed as
+    one blob (which leaves a boot from the next frame floating in the cell).
+    """
     rgb = np.asarray(Image.open(path).convert("RGB"))
     h, w, _ = rgb.shape
     bg = background(rgb, rule_lines)
+    if seam_rows:
+        ch = h / rows
+        for r in seam_rows:
+            y0, y1 = int(round(r * ch)), int(round((r + 1) * ch))
+            for c in range(1, cols):
+                bg[y0:y1, int(round(c * w / cols))] = True
     lum = rgb.min(axis=2).astype(np.float32)
 
     alpha = np.ones((h, w), np.float32)
@@ -592,7 +646,8 @@ def walk_cadence(sheet_id: str) -> tuple[int, int]:
 
 
 def build(sheet_id: str, spec: dict, tint=None) -> None:
-    page = segment(os.path.join(SRC, spec["file"]), spec["cols"], spec.get("rule_lines", False))
+    page = segment(os.path.join(SRC, spec["file"]), spec["cols"], spec.get("rule_lines", False),
+                   spec.get("rows", 8), tuple(spec.get("seam_rows", ())))
     cols = spec["cols"]
     anims_src = anim_set(spec["pose"], cols)
 

@@ -14,11 +14,12 @@ export interface Settings {
   touch?: 'auto' | 'on' | 'off';
   shake: boolean;
   crt: boolean;
+  rumble: boolean;
   lang?: 'en' | 'tr';
 }
 
 const KEY = BRANDING.storagePrefix + '.settings.v1';
-const DEFAULTS: Settings = { music: 0.55, sfx: 0.8, muted: false, name: '', fighter: 'bt', touch: 'auto', shake: true, crt: true };
+const DEFAULTS: Settings = { music: 0.55, sfx: 0.8, muted: false, name: '', fighter: 'bt', touch: 'auto', shake: true, crt: true, rumble: true };
 
 let cache: Settings | null = null;
 

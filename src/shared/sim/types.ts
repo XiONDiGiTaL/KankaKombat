@@ -34,7 +34,7 @@ export interface Ent {
   st: St; t: number; dur: number;
   atk: string | null;
   hitList: number[];
-  buffer: 'L' | 'H' | null; bufT: number;
+  buffer: 'L' | 'H' | 'G' | null; bufT: number;
   hitstop: number;
   inv: number;
   stun: number;
@@ -71,7 +71,7 @@ export interface HazardRt { kind: string; state: 0 | 1 | 2; x: number; dir: 1 | 
 export type GamePhase = 'lobby' | 'intro' | 'play' | 'clear' | 'bossintro' | 'boss' | 'bossdown' | 'chapterclear' | 'gameover' | 'final' | 'victory';
 
 export type SimEvent =
-  | { k: 'hit'; x: number; y: number; z: number; heavy: boolean; block?: boolean; dmg: number; tgt: number }
+  | { k: 'hit'; x: number; y: number; z: number; heavy: boolean; block?: boolean; dmg: number; tgt: number; src?: number; hazard?: boolean }
   | { k: 'whiff'; id: number; heavy: boolean }
   | { k: 'ko'; id: number; boss: boolean }
   | { k: 'coin'; id: number; amt: number }

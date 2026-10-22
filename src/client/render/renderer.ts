@@ -3,20 +3,22 @@
 import { SCREEN_H, SCREEN_W, STREET_TOP, MAX_LIVES, BAG_SLOTS } from '../../shared/data/constants';
 import { CHAPTERS, ShopSpot } from '../../shared/data/stages';
 import { ENEMIES } from '../../shared/data/enemies';
-import { FIGHTERS } from '../../shared/data/fighters';
+import { FIGHTERS, type FighterId } from '../../shared/data/fighters';
 import { ATTACKS } from '../../shared/data/attacks';
 import { SHOPS, ShopStyle } from '../../shared/data/shops';
 import { ITEMS } from '../../shared/data/items';
 import { formatMoney } from '../../shared/data/currency';
 import { phaseOf } from '../../shared/sim/combat';
-import { F_INV, View, ViewEnt, ViewPlayer } from '../../shared/sim/snapshot';
+import { F_BOSS, F_INV, View, ViewEnt, ViewPlayer } from '../../shared/sim/snapshot';
 import { BgLayers, buildBackground, drawShopBooth, shopStyleFor } from './backgrounds';
 import { artCanvas, drawItem, hazardSize, propArt, propFrame } from './art';
-import { drawText, textWidth } from './font';
+import { drawText, textWidth, titleWidth } from './font';
 import { Fx } from './fx';
+import { Combos } from './combo';
 import { frameFor, getSheet } from './sprites';
 import { npcAnchor, npcFrame } from './npcs';
 import { MIRRORED, paintedShop, stageFor, stageIdFor, type StageArt } from './stages';
+import { grabTarget, heldVictim } from '../grabReadiness';
 import type { Crowd } from '../ambient';
 import { t } from '../i18n';
 
@@ -26,6 +28,8 @@ export class Renderer {
   readonly ctx: CanvasRenderingContext2D;
   readonly canvas: HTMLCanvasElement;
   fx = new Fx();
+  /** Per-player hit chains, fed by the hit events and stepped with the game clock. */
+  readonly combos = new Combos();
   private bg: BgLayers | null = null;
   private bgKey = '';
   private frame = 0;
@@ -214,6 +218,14 @@ export class Renderer {
       const food = v.pickups.find((p) => p.kind === 'food' && Math.abs(p.x - me.x) < 18 && Math.abs(p.z - me.z) < 10);
       if (food) this.prompt(sx(food.x), sy(food.z, 0) - 16, 'GRAB: PICK UP');
     }
+    // The clinch window: tag the enemy the authoritative grab would catch right now, then
+    // the throw once the hold is closed. Steady rather than blinking so it reads mid-fight.
+    if (me && v.phase === 'play') {
+      const target = grabTarget(me, v.ents);
+      if (target) this.prompt(sx(target.x), sy(target.z, target.y) - (target.flags & F_BOSS ? 98 : 78), t('GRAB'), false);
+      const victim = heldVictim(me, v.ents);
+      if (victim) this.prompt(sx(victim.x), sy(victim.z, victim.y) - 78, t('THROW'), false);
+    }
     // speech bubbles
     for (const e of v.ents) if (this.fx.bubbles.some((b) => b.id === e.id)) this.fx.drawBubble(c, e.id, sx(e.x), sy(e.z, e.y) - (e.flags & 4 ? 70 : 52));
   }
@@ -255,8 +267,8 @@ export class Renderer {
     c.globalAlpha = 1;
   }
 
-  private prompt(x: number, y: number, text: string): void {
-    if (this.frame % 60 > 50) return;
+  private prompt(x: number, y: number, text: string, blink = true): void {
+    if (blink && this.frame % 60 > 50) return;
     const w = textWidth(text) + 6;
     const xx = Math.max(2, Math.min(SCREEN_W - w - 2, Math.round(x - w / 2)));
     this.ctx.fillStyle = 'rgba(26,18,32,0.85)'; this.ctx.fillRect(xx, y - 2, w, 11);
@@ -324,7 +336,11 @@ export class Renderer {
     const c = this.ctx;
     const n = Math.max(1, v.players.length);
     const pw = n <= 2 ? 120 : 94;
-    v.players.forEach((p, i) => this.playerPanel(p, v, 3 + i * (pw + 2), pw));
+    v.players.forEach((p, i) => {
+      const x = 3 + i * (pw + 2);
+      this.playerPanel(p, v, x, pw);
+      this.comboPlate(p, x, pw);
+    });
     // boss bar
     const boss = v.ents.find((e) => e.id === v.bossId);
     if (boss && (v.phase === 'boss' || v.phase === 'bossintro')) {
@@ -353,6 +369,34 @@ export class Renderer {
     }
   }
 
+  /** Arcade hit counter under its owner's HUD panel. It borrows the panel's slot colour
+   *  (the same red/blue/green/gold as the P1/P2 tags and health frame) and the chunky title
+   *  lettering, then fades out once the chain has not been extended for a second. */
+  private comboPlate(p: ViewPlayer, x: number, w: number): void {
+    const combo = this.combos.get(p.id);
+    if (!combo) return;
+    const c = this.ctx;
+    const col = SLOT_COLORS[p.slot] ?? '#f6e8b8';
+    const y = 31, h = 22;
+    const pad = w <= 94 ? 3 : 6;
+    const label = `P${p.slot + 1} ${t('COMBO')}:`;
+    const num = String(combo.n);
+    // Two digits at title scale read best; a very long chain drops to scale 1 rather than
+    // spilling out of the narrow four-player panel.
+    const inner = w - pad * 2;
+    const numScale = textWidth(label) + 3 + titleWidth(num, 2) <= inner ? 2 : 1;
+    c.globalAlpha = combo.alpha;
+    c.fillStyle = 'rgba(26,18,32,0.86)'; c.fillRect(x, y, w, h);
+    c.fillStyle = col; c.fillRect(x, y, 2, h); c.fillRect(x + 2, y + h - 1, w - 2, 1);
+    c.fillStyle = 'rgba(255,255,255,0.08)'; c.fillRect(x + 2, y, w - 2, 1);
+    drawText(c, label, x + pad, y + 7, col, { shadow: '#1a1220' });
+    // The count pops white for a few ticks on every hit, then settles back to the slot colour.
+    const jitter = combo.pop > 2 ? (combo.pop % 2 ? 1 : -1) : 0;
+    drawText(c, num, x + w - pad + jitter, numScale === 2 ? y + 3 : y + 7,
+      combo.pop > 2 ? '#fff6d0' : col, { align: 'right', font: 'title', scale: numScale, shadow: '#1a1220' });
+    c.globalAlpha = 1;
+  }
+
   private playerPanel(p: ViewPlayer, v: View, x: number, w: number): void {
     const c = this.ctx;
     const e = v.ents.find((en) => en.id === p.id);
@@ -371,7 +415,7 @@ export class Renderer {
       c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw + hx, Math.floor(fi / sheet.atlas.cols) * ch + hy, hw, hh,
         x + 2, 2 + Math.floor((27 - hh) / 2), hw, hh);
     }
-    const name = `P${p.slot + 1} ${FIGHTERS[p.fighter as 'bt' | 'sc']?.name ?? ''}`;
+    const name = `P${p.slot + 1} ${FIGHTERS[p.fighter as FighterId]?.name ?? ''}`;
     drawText(c, name, x + 26, 4, col, { shadow: '#1a1220' });
     drawText(c, `LV${p.lvl}`, x + w - 4, 4, '#f6e8b8', { align: 'right', shadow: '#1a1220' });
     // hp bar

@@ -82,10 +82,15 @@ export function updateCombat(sim: Sim, e: Ent): boolean {
       e.vx *= 0.8;
       if (e.t >= e.dur) setState(e, 'idle');
       return true;
-    case 'grab':
-      e.vx *= 0.7;
+    case 'grab': {
+      // The grab is a short active window, not a one-frame check: a press made a step
+      // before the enemy walks into reach still lands, which is what makes a grappler
+      // playable without frame-perfect timing.
+      e.vx *= 0.85;
+      if (e.t >= 1 && e.t <= 9 && tryGrab(sim, e)) return true;
       if (e.t >= 14) setState(e, 'idle');
       return true;
+    }
     case 'held': {
       const h = sim.byId(e.heldBy);
       if (!h || (h.st !== 'hold' && h.st !== 'grabatk' && h.st !== 'throw')) { e.heldBy = -1; setState(e, 'idle'); e.inv = 20; return false; }
@@ -182,7 +187,7 @@ export function applyHit(sim: Sim, src: Ent | null, t: Ent, a: AttackDef, dirOve
       setState(t, 'hurt', 34); t.vx = dir * 2;
       const dmg = Math.max(1, Math.round((a.damage * (src ? damageMul(src) : 1)) / defenseOf(t) * 0.5));
       if (!(sim.godMode && t.kind === 'p')) t.hp -= dmg;
-      sim.emit({ k: 'hit', x: t.x - dir * 6, y: t.y + 30, z: t.z, heavy: true, dmg, tgt: t.id });
+      sim.emit({ k: 'hit', x: t.x - dir * 6, y: t.y + 30, z: t.z, heavy: true, dmg, tgt: t.id, src: src?.id ?? -1 });
       if (src) src.hitstop = hs;
       t.hitstop = hs;
       return;
@@ -192,7 +197,7 @@ export function applyHit(sim: Sim, src: Ent | null, t: Ent, a: AttackDef, dirOve
     t.vx = dir * Math.min(2.4, a.kb[0] * 0.6 + 0.6);
     if (src) src.hitstop = 3;
     t.hitstop = 3;
-    sim.emit({ k: 'hit', x: t.x - dir * 6, y: t.y + 30, z: t.z, heavy: false, block: true, dmg: chip, tgt: t.id });
+    sim.emit({ k: 'hit', x: t.x - dir * 6, y: t.y + 30, z: t.z, heavy: false, block: true, dmg: chip, tgt: t.id, src: src?.id ?? -1 });
     return;
   }
   let dmg = (a.damage * (src ? damageMul(src) : 1)) / defenseOf(t);
@@ -200,7 +205,7 @@ export function applyHit(sim: Sim, src: Ent | null, t: Ent, a: AttackDef, dirOve
   dmg = Math.max(1, Math.round(dmg));
   if (!(sim.godMode && t.kind === 'p')) t.hp -= dmg;
   if (src) t.lastHitBy = src.id;
-  sim.emit({ k: 'hit', x: t.x - dir * 4, y: t.y + (a.box[2] + a.box[3]) / 2, z: t.z, heavy: !!a.heavy, dmg, tgt: t.id });
+  sim.emit({ k: 'hit', x: t.x - dir * 4, y: t.y + (a.box[2] + a.box[3]) / 2, z: t.z, heavy: !!a.heavy, dmg, tgt: t.id, src: src?.id ?? -1 });
   if (src) src.hitstop = hs;
   t.hitstop = hs;
   // a held victim being hit (by someone else) or a holder being hit breaks the grab
@@ -254,17 +259,25 @@ export function grabEligible(t: Ent): boolean {
     (t.st === 'attack' && !!t.atk && phaseOf(ATTACKS[t.atk], t.t) !== 'a' && !ATTACKS[t.atk].armor);
 }
 
-/** Player grab: range, facing, target state and eligibility are all checked here. */
+/** Player grab: range, facing, target state and eligibility are all checked here. A small
+ *  negative dx lets a point-blank clinch work when the two bodies overlap; without it a
+ *  player who walked into an enemy (there is no body collision between them) found the
+ *  target too close to grab. */
 export function tryGrab(sim: Sim, p: Ent): boolean {
   let best: Ent | null = null, bestD = Infinity;
+  const f = FIGHTERS[p.def as FighterId];
   for (const t of sim.ents) {
     if (!grabEligible(t)) continue;
     const dx = (t.x - p.x) * p.face;
-    if (dx < 4 || dx > 26 || Math.abs(t.z - p.z) > 9) continue;
+    // 11 px of lane tolerance: two fighters whose sprites visibly overlap should be in
+    // grabbing distance even when their depth lines differ by a few pixels.
+    if (dx < -4 || dx > f.grabRange || Math.abs(t.z - p.z) > 11) continue;
     if (dx < bestD) { best = t; bestD = dx; }
   }
   if (!best) return false;
-  const f = FIGHTERS[p.def as FighterId];
+  // A target caught in the overlap tolerance may be a few pixels behind the facing;
+  // turn into the clinch so the held pose is on the side the player is actually facing.
+  if ((best.x - p.x) * p.face < 0) p.face = best.x > p.x ? 1 : -1;
   setState(p, 'hold'); p.hold = best.id; p.holdT = f.grabHold; p.holdHits = 0; p.vx = 0; p.vz = 0;
   sim.releaseHolds(best);
   setState(best, 'held'); best.heldBy = p.id; best.face = (p.face === 1 ? -1 : 1);
@@ -316,10 +329,15 @@ function heldAction(sim: Sim, e: Ent): void {
   if (!t) return;
   if (e.st === 'grabatk') {
     const a = ATTACKS[e.atk!];
+    // Aynur's hold is built for a long slap combo; everyone else's ends on the third hit.
+    const f = FIGHTERS[e.def as FighterId];
+    const finisher = f.grabHits ?? 3;
     e.holdHits++;
+    const last = e.holdHits >= finisher;
     t.heldBy = -1; t.st = 'idle';
-    applyHit(sim, e, t, e.holdHits >= 3 ? { ...a, knockdown: true, kb: [3.2, 2.6], damage: a.damage + 3 } : a, e.face);
-    if (t.hp > 0 && e.holdHits < 3 && (t.st as string) !== 'knock') { setState(t, 'held'); t.heldBy = e.id; e.hold = t.id; positionHeld(e, t); }
+    const bonus = last ? f.grabFinisher ?? 3 : 0;
+    applyHit(sim, e, t, last ? { ...a, knockdown: true, kb: [3.2, 2.6], damage: a.damage + bonus } : a, e.face);
+    if (t.hp > 0 && !last && (t.st as string) !== 'knock') { setState(t, 'held'); t.heldBy = e.id; e.hold = t.id; positionHeld(e, t); }
     else { e.hold = -1; t.heldBy = -1; }
     return;
   }

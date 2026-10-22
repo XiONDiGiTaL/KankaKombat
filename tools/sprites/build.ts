@@ -25,5 +25,8 @@ for (const { spec, anims } of CHARACTERS) {
   writePng(`${OUT}/${spec.id}.png`, sheet);
   writeFileSync(`${OUT}/${spec.id}.json`, JSON.stringify(atlas));
 }
+// Imported sheets are not in the procedural roster, but the game loads everything listed
+// here, so they still belong in the index even though this pass never touches their pixels.
+for (const id of imported) index[id] ??= `${id}.json`;
 writeFileSync(`${OUT}/index.json`, JSON.stringify(index));
 console.log(`sprites: ${CHARACTERS.length} sheets in ${OUT} (${imported.join(', ') || 'none'} imported)`);

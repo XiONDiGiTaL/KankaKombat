@@ -86,18 +86,36 @@ input[type=range] { accent-color: var(--gold); width: 200px; }
 .card { background: var(--panel2); border: 3px solid var(--ink); box-shadow: 0 0 0 2px #5a4a70; padding: 10px; cursor: pointer; display: flex; gap: 10px; align-items: stretch; }
 .card > div { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .card.on { box-shadow: 0 0 0 3px var(--gold); background: #3a2a52; }
+/* A hidden fighter, revealed: gold frame and a tag so it reads as a discovery. */
+.card.secret { background: linear-gradient(180deg, #4a3160, #2a1c3e); }
+.card.secret h3 { color: #ffe066; }
+.card .tag { font-size: 7px; letter-spacing: 1px; color: var(--ink); background: var(--gold); padding: 1px 4px; margin-left: 4px; vertical-align: 2px; }
+.secret-hint { font-size: 7px; letter-spacing: .5px; color: #d3b8ff; margin: 0 0 4px; cursor: pointer; }
+.secret-hint:hover { color: #ffe066; }
 .card canvas { width: 128px; height: auto; min-height: 172px; border: 2px solid var(--ink); background: #241a34; image-rendering: pixelated; flex: none; align-self: stretch; }
 .card h3 { margin: 0 0 6px; font-size: 14px; color: var(--gold); }
 .card p { font-size: 8px; color: var(--muted); line-height: 1.8; margin: 4px 0; }
-/* Stat block. One grid per card: the labels share an auto column and the tracks fill
+/* Stat block. One grid row per stat: the labels share an auto column and the tracks fill
    the rest, so both fighters get identical track widths (same labels, same card
    width). The empty part of a track stays visible, split into five segments, so the
-   two can be compared at a glance instead of by bar length alone. */
-.stats { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; row-gap: 4px; align-items: center; margin-top: auto; padding-top: 8px; font-size: 8px; }
+   two can be compared at a glance instead of by bar length alone. Each row is a button
+   so it can explain itself on hover, focus or tap without picking the fighter. */
+.stats { display: grid; row-gap: 4px; margin-top: auto; padding-top: 8px; font-size: 8px; }
+.stats .stat { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: center; width: 100%; margin: 0; padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: help; color: inherit; }
+.stats .stat:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.stats .stat:hover .sl, .stats .stat:focus-visible .sl { color: var(--gold); }
 .stats .sl { white-space: nowrap; color: var(--cream); }
 .stats .track { position: relative; height: 7px; max-width: 180px; background: #5a5268; box-shadow: inset 0 0 0 1px #171122, inset 0 1px 0 rgba(255, 255, 255, .10); }
 .stats .track::after { content: ''; position: absolute; inset: 0; z-index: 2; background: repeating-linear-gradient(90deg, rgba(14, 10, 20, 0) 0 calc(20% - 1px), #241a34 calc(20% - 1px) 20%); }
 .stats .track b { position: absolute; inset: 0 auto 0 0; width: calc(var(--v) / 5 * 100%); background: linear-gradient(180deg, #ffe066 0%, #f0c818 55%, #c08e10 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .40); }
+/* One tooltip for the whole select screen, on the body so it can hang over the panel
+   edge. It never takes pointer events: the row underneath stays clickable. */
+#stat-tip { position: fixed; z-index: 30; max-width: 232px; padding: 6px 8px; background: var(--panel); border: 2px solid var(--gold); box-shadow: 4px 4px 0 rgba(0, 0, 0, .55); font-size: 8px; line-height: 1.7; color: var(--cream); pointer-events: none; }
+#stat-tip[hidden] { display: none; }
+#stat-tip b { display: block; color: var(--gold); font-size: 9px; letter-spacing: 1px; }
+#stat-tip p { margin: 2px 0 4px; color: var(--muted); }
+#stat-tip .figs { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+#stat-tip .figs em { font-style: normal; color: var(--gold); }
 
 .code { color: #fff; background: var(--ink); padding: 4px 10px; letter-spacing: 4px; }
 .players { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; }
