@@ -16,10 +16,19 @@ runbook covers putting that origin behind Cloudflare: real `301`s for the pre-re
 - Pages cannot issue redirects and ignores `_redirects`-style files, so the redirect has
   to happen at the edge.
 
-> Blocked from inside the agent session: the connected Cloudflare integration can read
-> the account, but every zone-scoped call returns `403` with error `9109` ("Invalid
-> access token"). No DNS, redirect or cache change could be applied from here. Either
-> reconnect the Cloudflare integration, or make the changes below in the dashboard.
+> Blocked from inside the agent session. Two separate problems:
+>
+> 1. The connected Cloudflare integration can read the account, but every zone-scoped
+>    call returns `403` with error `9109` ("Invalid access token") — re-checked on
+>    2026-10-22, so the credential needs the `Zone:Read` / `DNS:Edit` scopes (reconnect
+>    the integration) before any record can be flipped to Proxied.
+> 2. That integration exposes zones, DNS records, tunnels and firewall rules only. It has
+>    no Redirect Rules or Cache Rules endpoints at all, so even with a working token the
+>    rule work in steps 2 and 3 would have to go through the dashboard or a direct API
+>    call.
+>
+> Until both are sorted the records stay grey-clouded and `/KankaKombat/` keeps answering
+> `200` with the forwarder page.
 
 ## 1. Proxy the records
 
@@ -67,6 +76,23 @@ practice.
 
 Keep the forwarder page in `xiondigital.github.io` as the fallback for the windows when
 the proxy is switched off.
+
+### With an API token instead of the dashboard
+
+A token scoped to `Zone → Redirect Rules → Edit` (plus `Zone → Cache Rules → Edit` for
+step 3 and `Zone → DNS → Edit` for step 1) can do the same thing. The redirect rule is a
+zone ruleset entry, so it is a `PUT` on the whole `http_request_dynamic_redirect` ruleset —
+read it first, then send the full rule list back with the new rule appended, otherwise the
+existing rules are replaced:
+
+```bash
+ZONE=<zone id>; TOKEN=<api token>
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones/$ZONE/rulesets/phases/http_request_dynamic_redirect/entrypoint"
+```
+
+Rulesets, unlike the old Page Rules, survive a dashboard edit; re-read the entrypoint after
+any change to confirm the two rules below are present.
 
 ## 3. Cache the build output at the edge
 
