@@ -22,6 +22,8 @@ export const TR: Record<string, string> = {
   'CHOOSE YOUR FIGHTER': 'DÖVÜŞÇÜNÜ SEÇ',
   'ONLINE CO-OP LOBBY': 'İNTERNET ODASI',
   'NAME': 'İSİM',
+  'Your name, shown on the HUD.': 'İsmin, oyun içi göstergede görünür.',
+  'Your name, shown in the room and on the HUD. Everyone types their own.': 'İsmin odada ve oyun içi göstergede görünür. Her oyuncu kendi ismini yazar.',
   'CHAPTER': 'BÖLÜM',
   'SECTION': 'KISIM',
   'FIGHT!': 'DÖVÜŞ!',

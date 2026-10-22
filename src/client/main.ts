@@ -247,6 +247,10 @@ class App {
   setSelectMode(m: 'solo' | 'online'): void {
     this.selectMode = m;
     $('select-title').textContent = m === 'solo' ? tr('CHOOSE YOUR FIGHTER') : tr('ONLINE CO-OP');
+    // The name is this player's own tag, not a room title: everyone sets it on their own screen.
+    $('name-hint').textContent = tr(m === 'solo'
+      ? 'Your name, shown on the HUD.'
+      : 'Your name, shown in the room and on the HUD. Everyone types their own.');
     $('select-buttons').hidden = m !== 'solo';
     $('online-buttons').hidden = m !== 'online';
   }
@@ -270,8 +274,16 @@ class App {
       card.className = 'card'; card.tabIndex = 0; card.dataset.f = f.id;
       // exactly 2x the 64x76 sprite cell, so nearest-neighbour scaling stays even
       const cv = document.createElement('canvas'); cv.width = 128; cv.height = 152;
-      const stats = Object.entries(f.stats).map(([k, v]) => `<div class="stat">${k.toUpperCase().padEnd(9, ' ')}<i><b style="width:${v * 20}%"></b></i></div>`).join('');
-      card.innerHTML = `<div><h3>${f.name}</h3><p>${tr(f.blurb)}</p>${stats}</div>`;
+      // One grid for the whole stat block: the labels share the auto-sized first column
+      // and the tracks take the rest, so both fighters' bars line up (see .stats).
+      const stats = Object.entries(f.stats).map(([k, v]) => {
+        const key = k.toUpperCase();
+        return `<span class="sl" data-i18n="${key}">${tr(key)}</span><i class="track" style="--v:${v}"><b></b></i>`;
+      }).join('');
+      // data-i18n keeps the blurb tied to its English key, so a rebuild while the UI is in
+      // Turkish cannot leave the Turkish text cached as the English original.
+      const blurb = f.blurb.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      card.innerHTML = `<div><h3>${f.name}</h3><p data-i18n="${blurb}">${tr(f.blurb)}</p><div class="stats">${stats}</div></div>`;
       card.prepend(cv);
       const pick = () => { this.fighter = f.id; saveSettings({ fighter: f.id }); this.audio.sfx('ok'); wrap.querySelectorAll('.card').forEach((c) => c.classList.toggle('on', (c as HTMLElement).dataset.f === f.id)); };
       card.addEventListener('click', pick);
@@ -286,6 +298,10 @@ class App {
     if (this.screen !== 'select') return;
     document.querySelectorAll<HTMLElement>('#cards .card').forEach((card) => {
       const cv = card.querySelector('canvas')!; const c = cv.getContext('2d')!;
+      // The frame stretches to the card height, so the backing store follows it and the
+      // portrait always fills the frame instead of leaving a gap under the bust.
+      const boxW = Math.round(cv.clientWidth), boxH = Math.round(cv.clientHeight);
+      if (boxW && boxH && (cv.width !== boxW || cv.height !== boxH)) { cv.width = boxW; cv.height = boxH; }
       const id = card.dataset.f!;
       const portrait = PORTRAITS.get(id);
       if (portrait && portrait.complete && portrait.naturalWidth) {

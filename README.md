@@ -29,7 +29,9 @@ is always the build from the tip of `main`.
 GitHub Pages matches project paths case-sensitively, so the pre-rename
 `xiondigital.net/KankaKombat/` address cannot be answered by this repo. It is forwarded
 by `KankaKombat/index.html` in the `xiondigital.github.io` repo, which keeps `?room=`
-invite codes intact.
+invite codes intact. A real edge `301` and asset caching need the domain proxied through
+Cloudflare; the exact records, rule expressions and verification steps are in
+[docs/cloudflare.md](docs/cloudflare.md).
 
 ## Features
 

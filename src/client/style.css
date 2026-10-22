@@ -83,14 +83,21 @@ input[type=range] { accent-color: var(--gold); width: 200px; }
 #loadbar { height: 100%; width: 0; background: var(--gold); }
 
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.card { background: var(--panel2); border: 3px solid var(--ink); box-shadow: 0 0 0 2px #5a4a70; padding: 10px; cursor: pointer; display: flex; gap: 10px; align-items: flex-start; }
+.card { background: var(--panel2); border: 3px solid var(--ink); box-shadow: 0 0 0 2px #5a4a70; padding: 10px; cursor: pointer; display: flex; gap: 10px; align-items: stretch; }
+.card > div { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .card.on { box-shadow: 0 0 0 3px var(--gold); background: #3a2a52; }
-.card canvas { width: 128px; height: 152px; border: 2px solid var(--ink); background: #8fb4c8; flex: none; }
+.card canvas { width: 128px; height: auto; min-height: 152px; border: 2px solid var(--ink); background: #8fb4c8; flex: none; align-self: stretch; }
 .card h3 { margin: 0 0 6px; font-size: 14px; color: var(--gold); }
 .card p { font-size: 8px; color: var(--muted); line-height: 1.8; margin: 4px 0; }
-.stat { display: flex; align-items: center; gap: 6px; font-size: 8px; margin: 3px 0; }
-.stat i { display: inline-block; width: 70px; height: 6px; background: #3a2a4a; position: relative; }
-.stat i b { position: absolute; inset: 0 auto 0 0; background: var(--gold); }
+/* Stat block. One grid per card: the labels share an auto column and the tracks fill
+   the rest, so both fighters get identical track widths (same labels, same card
+   width). The empty part of a track stays visible, split into five segments, so the
+   two can be compared at a glance instead of by bar length alone. */
+.stats { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; row-gap: 4px; align-items: center; margin-top: auto; padding-top: 8px; font-size: 8px; }
+.stats .sl { white-space: nowrap; color: var(--cream); }
+.stats .track { position: relative; height: 7px; max-width: 180px; background: #5a5268; box-shadow: inset 0 0 0 1px #171122, inset 0 1px 0 rgba(255, 255, 255, .10); }
+.stats .track::after { content: ''; position: absolute; inset: 0; z-index: 2; background: repeating-linear-gradient(90deg, rgba(14, 10, 20, 0) 0 calc(20% - 1px), #241a34 calc(20% - 1px) 20%); }
+.stats .track b { position: absolute; inset: 0 auto 0 0; width: calc(var(--v) / 5 * 100%); background: linear-gradient(180deg, #ffe066 0%, #f0c818 55%, #c08e10 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .40); }
 
 .code { color: #fff; background: var(--ink); padding: 4px 10px; letter-spacing: 4px; }
 .players { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; }
@@ -138,7 +145,7 @@ table.keys td, table.food td { padding: 4px 4px; border-bottom: 1px solid #3a2a4
 @media (max-width: 720px) {
   body { font-size: 10px; }
   .cards, .cols { grid-template-columns: 1fr; }
-  .card canvas { width: 128px; height: 152px; }
+  .card canvas { width: 128px; height: auto; }
   .panel { padding: 14px; }
   h2 { font-size: 13px; }
 }

@@ -91,6 +91,12 @@ _Updated 2026-10-21._
   game's own sheets and fonts (`npm run web-assets`). Because Pages project paths are
   case-sensitive, the old `/KankaKombat/` URL is served by a forwarder page in the
   `xiondigital.github.io` repo that carries `?room=` codes through to the live game.
+  Turning that into a real edge `301` (plus asset caching) needs the domain proxied
+  through Cloudflare; the runbook is [docs/cloudflare.md](docs/cloudflare.md).
+- Fighter select: one grid per stat block, so both heroes' bars share the same labels,
+  the same track width and a segmented empty track; the bust fills the card frame.
+- The name field is this player's own tag, not a room title, and the screen now says so
+  in both languages.
 
 ## VISUALLY VERIFIED (rendered screenshots in `.freebuff/preview/audit/`)
 
