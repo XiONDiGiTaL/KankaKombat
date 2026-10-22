@@ -253,6 +253,10 @@ _Updated 2026-10-22._
   screen (`/assets/music/title.mp3`, 142s) and each city theme on its chapter, including
   the boss arena where the İzmir theme kept playing instead of switching.
 - Review sheet for every frontage and booth: [stage-dressing.png](docs/screenshots/stage-dressing.png).
+- The deployed build on xiondigital.net/kankakombat running the new controls: the main menu
+  ([menu](docs/screenshots/live-menu.png)), Flatbush Avenue with the imported strip
+  ([street](docs/screenshots/live-flatbush.png)) and pause opened with Start
+  ([pause](docs/screenshots/live-pause.png)), with RESUME focused and ready for A/Z.
 
 ## STILL PLANNED
 
