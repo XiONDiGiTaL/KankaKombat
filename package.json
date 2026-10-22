@@ -15,10 +15,14 @@
     "sprites": "tsx tools/sprites/build.ts",
     "sheets": "python tools/art/import_sheets.py",
     "props": "python tools/art/import_props.py",
+    "hazards": "python tools/art/import_hazards.py",
+    "npcs": "python tools/art/import_npcs.py",
+    "stages": "python tools/art/import_stages.py",
     "web-assets": "python tools/art/make_web_assets.py",
     "fonts": "tsx tools/font/build.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "verify:live": "node tools/verify-live.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "engines": {

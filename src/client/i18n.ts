@@ -10,7 +10,7 @@ export const TR: Record<string, string> = {
   // ---- shell / menus
   'LOADING': 'YÜKLENİYOR',
   'Warming up the çay…': 'Çay demleniyor…',
-  'PRESS ENTER / TAP TO START': 'ENTER / DOKUN VE BAŞLA',
+  'PRESS Z / ENTER / TAP TO START': 'Z / ENTER / DOKUN VE BAŞLA',
   '© XiØN / XiONDiGiTaL — original game, original art & music': '© XiØN / XiONDiGiTaL — özgün oyun, özgün görsel ve müzik',
   'MAIN MENU': 'ANA MENÜ',
   'SOLO PLAY': 'TEK KİŞİLİK',
@@ -52,7 +52,7 @@ export const TR: Record<string, string> = {
   'RESET KEYS': 'TUŞLARI SIFIRLA',
   'FIGHTING': 'DÖVÜŞ',
   'FOOD & MONEY': 'YEMEK VE PARA',
-  'Gamepad: D-pad/stick move · X light · Y heavy · A jump · B grab · RB block · LB dodge · RT run · LT eat · Back next item · Start start.': 'Kol: yön tuşları hareket · X hafif · Y ağır · A zıpla · B tut · RB blok · LB atıl · RT koş · LT ye · Back sonraki yiyecek · Start başla.',
+  'Gamepad: D-pad/stick move · A jump / confirm · B grab / cancel · X light · Y heavy · LB dodge · RB block · LT eat · RT run · Back next item · Start pause.': 'Kol: yön tuşları hareket · A zıpla / onayla · B tut / geri · X hafif · Y ağır · LB atıl · RB blok · LT ye · RT koş · Back sonraki yiyecek · Start duraklat.',
   // ---- settings
   'SOUND': 'SES', 'SOUND: ON': 'SES: AÇIK', 'SOUND: OFF': 'SES: KAPALI',
   'MUSIC': 'MÜZİK',
@@ -119,6 +119,8 @@ export const TR: Record<string, string> = {
   'Hoş geldin kanka! Ne alalım?': 'Hoş geldin kanka! Ne alalım?', 'Simit mi, ayran mı?': 'Simit mi, ayran mı?',
   'Bir çay içmeden olmaz, buyur.': 'Bir çay içmeden olmaz, buyur.', 'Çayı demledim, ne alırsın?': 'Çayı demledim, ne alırsın?',
   'Fresh tortillas, kanka!': 'Taze tortillalar, kanka!', 'What can I get you, amigo?': 'Ne alırsın, amigo?',
+  'NEWSSTAND': 'GAZETE BÜFE', 'PAPERS · CANDY · METROCARD': 'GAZETE · ŞEKER · METROKART',
+  'Mind the doors, kanka. What do you need?': 'Kapılara dikkat kanka. Ne lazım?', 'Dee': 'Dee',
   'Manny': 'Manny', 'Sal': 'Sal', 'Nazmiye': 'Nazmiye', 'Hasan': 'Hasan', 'Fehmi': 'Fehmi', 'Ayşe': 'Ayşe', 'Lupe': 'Lupe', 'Rico': 'Rico',
   // ---- in-game messages / overlays
   'WARNING!': 'DİKKAT!', 'SECTION CLEAR!': 'KISIM TEMİZ!', 'K.O.!': 'K.O.!', 'GAME OVER': 'OYUN BİTTİ',
@@ -139,9 +141,10 @@ export const TR: Record<string, string> = {
   'Power & grapples. Launching uppercut, armored haymaker, huge throws.': 'Güç ve tutuşlar. Havaya kaldıran aparkat, zırhlı kroşe, dev fırlatmalar.',
   'POWER': 'GÜÇ', 'SPEED': 'HIZ', 'GRAPPLE': 'TUTUŞ', 'TOUGHNESS': 'DAYANIKLILIK',
   'Move left': 'Sola git', 'Move right': 'Sağa git', 'Move up (into the street)': 'Yukarı git (sokağa)', 'Move down (toward you)': 'Aşağı git (sana doğru)',
-  'Light attack / combo': 'Hafif vuruş / kombo', 'Heavy attack / throw': 'Ağır vuruş / fırlat', 'Jump': 'Zıpla', 'Grab / pick up / enter shop': 'Tut / al / dükkâna gir',
+  'Light attack / combo — and confirm': 'Hafif vuruş / kombo — ve onay', 'Heavy attack / throw — and cancel': 'Ağır vuruş / fırlat — ve geri', 'Jump': 'Zıpla', 'Grab / pick up / enter shop': 'Tut / al / dükkâna gir',
   'Block (hold)': 'Blok (basılı tut)', 'Dodge roll': 'Atılma', 'Run (hold) — or double-tap': 'Koş (basılı tut) — veya çift dokun', 'Eat selected bag item': 'Seçili çantayı ye',
-  'Next bag item': 'Sonraki çanta eşyası', 'Start / continue': 'Başla / devam',
+  'Next bag item': 'Sonraki çanta eşyası', 'Pause / start / continue': 'Duraklat / başla / devam',
+  'CONTROLLER CONNECTED': 'KOL BAĞLANDI',
 };
 
 export function t(s: string): string {

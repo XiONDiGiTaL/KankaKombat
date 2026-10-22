@@ -1,0 +1,69 @@
+<!-- Dev-only scene viewer: render one stage situation with the real renderer, no UI.
+     Usage (dev server): /tools/scene.html?scene=taxi|tram|bike|cart|peace|plaza|promenade|states|subway|bazaar|bosphorus[&cam=300]
+     Handy for reviewing imported art, hazard footprints and the pedestrian crowd. -->
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; background: #181820; color: #fff; font: 12px monospace; }
+  canvas { image-rendering: pixelated; display: block; }
+</style>
+<canvas id="out"></canvas>
+<script type="module">
+  import { Sim } from '/src/shared/sim/sim.ts';
+  import { encode, decode } from '/src/shared/sim/snapshot.ts';
+  import { Renderer } from '/src/client/render/renderer.ts';
+  import { loadSheets } from '/src/client/render/sprites.ts';
+  import { loadProps } from '/src/client/render/art.ts';
+  import { loadNpcs } from '/src/client/render/npcs.ts';
+  import { loadStages } from '/src/client/render/stages.ts';
+  import { Crowd } from '/src/client/ambient.ts';
+  import { CHAPTERS } from '/src/shared/data/stages.ts';
+  import { STAGE_FOR } from '/src/client/render/stages.ts';
+
+  const q = new URLSearchParams(location.search);
+  const scene = q.get('scene') ?? 'taxi';
+  const chs = { taxi: [0, 3], tram: [2, 2], bike: [1, 0], cart: [3, 0], delivery: [1, 0], peace: [0, 2], plaza: [2, 1], promenade: [3, 1], states: [0, 3], subway: [0, 1], bosphorus: [2, 0], bazaar: [1, 2] };
+  const [ch, se] = chs[scene];
+
+  const out = document.getElementById('out');
+  out.width = 384 * 3; out.height = 216 * 3;
+  const g = out.getContext('2d');
+  g.imageSmoothingEnabled = false;
+
+  await Promise.all([loadSheets('/assets/sprites/'), loadProps('/assets/props/'), loadNpcs('/assets/sprites/'), loadStages('/assets/stages/')]);
+
+  const sim = new Sim({ seed: 11, chapter: ch, section: se, godMode: true });
+  const p = sim.addPlayer('p0', 'bt', 'T0');
+  sim.start();
+  sim.waveIdx = sim.sectionDef.waves.length;
+  sim.phase = 'play';
+  p.x = 120; p.z = 20; p.face = 1;
+  sim.camX = Number(q.get('cam') ?? 0);
+  if (sim.camX) p.x += sim.camX;
+  sim.hazards.forEach((h) => (h.state = 0));
+  if (scene === 'states') {
+    // show all three hit states of the street furniture side by side
+    const kinds = ['bin', 'crate', 'box', 'barrel', 'mailbox'];
+    sim.props = kinds.map((kind, i) => ({ id: i + 1, kind, x: 40 + i * 70, z: 34, hp: i === 1 ? 1 : i === 2 ? 0 : 3, maxHp: 3, broken: i === 2, brokeT: 0 }));
+  }
+
+  const want = scene === 'delivery' ? 1 : 0;
+  const mid = () => {
+    const h = sim.hazards[want];
+    return !!h && h.state === 2 && h.x > 100 && h.x < 300;
+  };
+  for (let i = 0; i < 3000 && !mid(); i++) sim.step();
+
+  const r = new Renderer();
+  r.localPid = 'p0';
+  if (sim.sectionDef.peace) {
+    const crowd = new Crowd();
+    crowd.reset(`${ch}.${se}`, 5);
+    for (let i = 0; i < 240; i++) crowd.step(sim.camX);
+    r.crowd = crowd;
+  }
+  const view = decode(encode(sim, []));
+  r.render(view);
+  g.drawImage(r.canvas, 0, 0, out.width, out.height);
+  document.title = `${scene} theme=${CHAPTERS[ch].sections[se].theme} strip=${STAGE_FOR[CHAPTERS[ch].sections[se].theme] ?? '-'} tick ${sim.tick} hz=${view.hazards.map((h) => h.kind + ':' + h.state + '@' + Math.round(h.x)).join(',')} npc=${r.crowd ? r.crowd.walkers.map((w) => w.npc).join(',') : ''}`;
+</script>

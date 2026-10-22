@@ -135,7 +135,21 @@ function drawMark(ctx: CanvasRenderingContext2D, ch: string, ox: number, oy: num
   }
 }
 
-interface TextOpts { scale?: number; shadow?: string | null; align?: 'left' | 'center' | 'right'; outline?: boolean; font?: 'hud' | 'title'; color2?: string }
+interface TextOpts { scale?: number; shadow?: string | null; align?: 'left' | 'center' | 'right'; outline?: boolean; font?: 'hud' | 'title'; color2?: string; flatTitle?: boolean }
+
+/** Blend two hex colours; anything unparseable is returned unchanged, so a bad option
+ *  degrades to the flat colour rather than to black. */
+function mix(a: string, b: string, t: number): string {
+  const parse = (h: string): [number, number, number] | null => {
+    const s = h.replace('#', '');
+    const full = s.length === 3 ? s.split('').map((x) => x + x).join('') : s;
+    if (full.length !== 6 || /[^0-9a-f]/i.test(full)) return null;
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
+  };
+  const ca = parse(a), cb = parse(b);
+  if (!ca || !cb) return a;
+  return '#' + ca.map((v, i) => Math.round(v + (cb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
 
 function outlinePasses(sc: number): [number, number][] {
   return [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1], [-1, -1], [1, -1], [-1, 1]].map(([x, y]) => [x * sc, y * sc]);
@@ -152,6 +166,10 @@ export function drawText(ctx: CanvasRenderingContext2D, s: string, x: number, y:
   const sh = opts.shadow === undefined ? '#1a1220' : opts.shadow;
   const shadowCol = sh ?? '#1a1220';
 
+  // the reference title lettering is a two-tone gold: a lit top edge over a shaded base
+  const fillTop = opts.color2 ?? mix(color, '#ffffff', 0.45);
+  const fillBottom = mix(color, '#000000', 0.28);
+
   const pass = (dx: number, dy: number, col: string) => {
     ctx.fillStyle = col;
     let cx = ox;
@@ -160,9 +178,11 @@ export function drawText(ctx: CanvasRenderingContext2D, s: string, x: number, y:
       if (title) {
         const rows = T[base] ?? T['?'];
         for (let ry = 0; ry < gh; ry++) {
+          ctx.fillStyle = col === color && !opts.flatTitle ? (ry < 2 ? fillTop : ry >= gh - 2 ? fillBottom : col) : col;
           const row = rows[ry];
           for (let rx = 0; rx < gw; rx++) if (row[rx] === '#') ctx.fillRect(cx + rx * sc + dx, oy + ry * sc + dy, sc, sc);
         }
+        ctx.fillStyle = col;
         drawMark(ctx, ch, cx + dx, oy + dy, sc, gh, col);
       } else {
         const g = hudGlyph(base);

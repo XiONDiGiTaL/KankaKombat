@@ -214,6 +214,8 @@ export class Sim {
 
   private updateWaves(): void {
     const def = this.sectionDef;
+    // peaceful stretches are a town, not a fight: no waves, no camera locks
+    if (def.peace) return;
     // trigger the next wave when the camera reaches it
     if (this.lockX === null && this.waveIdx < def.waves.length && this.camX >= def.waves[this.waveIdx].at) {
       const w = def.waves[this.waveIdx];
@@ -286,8 +288,10 @@ export class Sim {
       } else if (t < h.warn + driveLen) {
         if (rt.state !== 2) { rt.state = 2; rt.hits = []; rt.x = rt.dir === 1 ? this.camX - 130 : this.camX + SCREEN_W + 130; }
         rt.x += h.speed * rt.dir;
+        // the hit box matches the vehicle's on-screen footprint (HAZARD_SIZE in the renderer)
+        const half = (h.hitW ?? 96) / 2;
         for (const e of this.ents) {
-          if (e.removed || e.hp <= 0 || e.y > 26 || e.z < rt.z0 - 4 || e.z > rt.z1 + 4 || Math.abs(e.x - rt.x) > 48 || rt.hits.includes(e.id)) continue;
+          if (e.removed || e.hp <= 0 || e.y > 26 || e.z < rt.z0 - 4 || e.z > rt.z1 + 4 || Math.abs(e.x - rt.x) > half || rt.hits.includes(e.id)) continue;
           if (e.st === 'shop' || e.st === 'out' || e.st === 'dead' || e.inv > 0 || e.st === 'down' || e.st === 'getup') continue;
           rt.hits.push(e.id);
           this.hurtBy(e, h.damage, rt.dir * 4.2, 3.2, -1);

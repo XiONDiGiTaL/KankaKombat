@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { HostSession } from '../src/shared/net/session';
 import { ServerMsg, PROTOCOL_VERSION } from '../src/shared/net/protocol';
 import { decode } from '../src/shared/sim/snapshot';
+import { CHAPTERS } from '../src/shared/data/stages';
 
 function room() {
   const inbox = new Map<string, ServerMsg[]>();
@@ -109,7 +110,8 @@ describe('room session', () => {
     r.hello('a', 'tokA', 'bt'); r.hello('b', 'tokB', 'sc');
     r.s.onMessage('a', { t: 'ready', r: true }); r.s.onMessage('b', { t: 'ready', r: true });
     (r.s.opts as { allowDebugStart?: boolean }).allowDebugStart = true;
-    r.s.onMessage('a', { t: 'start', ch: 0, se: 2 });
+    // the boss arena is wherever the chapter puts it, after the streets and the peaceful plaza
+    r.s.onMessage('a', { t: 'start', ch: 0, se: CHAPTERS[0].sections.findIndex((s) => s.boss) });
     const sim = r.s.sim!;
     r.tick(200);
     const boss = sim.byId(sim.bossId)!;

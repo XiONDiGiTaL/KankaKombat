@@ -22,6 +22,10 @@ export const SHOPS: Record<string, ShopDef> = {
     id: 'bodega', name: 'BODEGA', tagline: 'OPEN 24/7 · COLD DRINKS', style: 'ny', venue: 'store',
     keeper: 'Manny', keeperLine: "WELCOME! WHAT'LL IT BE?", stock: ALL,
   },
+  newsstand: {
+    id: 'newsstand', name: 'NEWSSTAND', tagline: 'PAPERS · CANDY · METROCARD', style: 'ny', venue: 'store',
+    keeper: 'Dee', keeperLine: 'Mind the doors, kanka. What do you need?', stock: ALL,
+  },
   hotdog: {
     id: 'hotdog', name: 'HOT DOG CART', tagline: 'SABRETT · DIRTY WATER · ICE COLD', style: 'ny', venue: 'vendor',
     keeper: 'Sal', keeperLine: 'Hey! Best cart on the block.', stock: ALL,

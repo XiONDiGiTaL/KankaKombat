@@ -16,6 +16,9 @@ import type { SimEvent } from '../shared/sim/types';
 import { Renderer, SLOT_COLORS } from './render/renderer';
 import { contentBox, getSheet, loadSheets } from './render/sprites';
 import { artCanvas, loadProps } from './render/art';
+import { loadNpcs } from './render/npcs';
+import { loadStages } from './render/stages';
+import { Crowd } from './ambient';
 import { drawText } from './render/font';
 import { Input, ACTIONS, keyLabel } from './input/input';
 import { Audio } from './audio/audio';
@@ -64,6 +67,7 @@ class App {
   private shopMsgTimer: ReturnType<typeof setTimeout> | null = null;
   lastView: View | null = null;
   autopilot: Bot | null = null;
+  crowd = new Crowd();
   ended = false;
   private acc = 0;
   private last = performance.now();
@@ -79,6 +83,8 @@ class App {
       await Promise.all([
         loadSheets('./assets/sprites/', (d, t) => { $('loadbar').style.width = `${(d / t) * 100}%`; }),
         loadProps('./assets/props/'),
+        loadNpcs('./assets/sprites/'),
+        loadStages('./assets/stages/'),
       ]);
     } catch (e) {
       $('loadmsg').textContent = 'Could not load game assets. Check your connection and refresh.';
@@ -86,6 +92,7 @@ class App {
       return;
     }
     this.bindUi();
+    if (DEBUG) (window as unknown as { app: App }).app = this;
     initLang();
     this.startAttract();
     this.drawLogo();
@@ -105,9 +112,12 @@ class App {
     $('pause-btn').classList.toggle('show', inGame && id === 'none');
     this.updateTouch();
     this.input.enabled = id === 'none' || id === 'shop' || id === 'title' || id === 'ended';
-    const first = document.querySelector<HTMLElement>(`#${id} button:not([disabled]), #${id} input`);
+    // a screen always starts with a sensible item focused, so a gamepad or the arrows have
+    // somewhere to go without moving the mouse first
+    const marked = [...document.querySelectorAll<HTMLElement>(`#${id} [data-primary]`)].filter((x) => x.offsetParent !== null);
+    const first = marked[0] ?? document.querySelector<HTMLElement>(`#${id} button:not([disabled]), #${id} input`);
     // focus after the current key event finishes, so Enter does not also "click" the new button
-    if (first && id !== 'title' && id !== 'none' && matchMedia('(pointer: fine)').matches) setTimeout(() => first.focus({ preventScroll: true }), 0);
+    if (first && id !== 'title' && id !== 'none') setTimeout(() => first.focus({ preventScroll: true }), 0);
     if (id === 'howto') this.buildHowto();
     if (id === 'settings') this.syncSettings();
   }
@@ -160,7 +170,10 @@ class App {
     document.querySelectorAll<HTMLButtonElement>('[data-back]').forEach((b) => b.addEventListener('click', () => { this.audio.sfx('ui'); this.goBack(); }));
     document.addEventListener('focusin', (e) => { if ((e.target as HTMLElement).tagName === 'BUTTON') this.audio.sfx('ui'); });
     $('title').addEventListener('click', () => this.titleStart());
-    this.input.onAnyKey = (code) => { if (this.screen === 'title' && (code === 'Enter' || code === 'Space' || code === 'KeyJ')) this.titleStart(); };
+    // Title, menus and the pad all go through menuKey/menuPad: one press must never both
+    // start the game and then act on the screen it just opened.
+    this.input.onPress = (bit) => this.menuKey(bit);
+    this.input.onPadConnect = (name) => this.toast(tr('CONTROLLER CONNECTED') + (name ? `: ${name.slice(0, 28)}` : ''));
     window.addEventListener('keydown', (e) => { if (this.screen === 'title' && e.key === 'Enter') e.preventDefault(); }, true);
     this.input.onPause = () => this.togglePause();
     $('pause-btn').addEventListener('click', () => this.togglePause());
@@ -593,6 +606,64 @@ class App {
     if (pressed & (BTN.GRAB | BTN.HEAVY)) this.client?.send({ t: 'cmd', c: 'leave' });
   }
 
+  // ------------------------------------------------------------------ menus
+  /** Focusable items of the current screen, in the order they are drawn. */
+  private menuItems(): HTMLElement[] {
+    const root = document.querySelector(`#${this.screen}`);
+    if (!root) return [];
+    return [...root.querySelectorAll<HTMLElement>('button:not([disabled]), select, .card')].filter((x) => x.offsetParent !== null);
+  }
+
+  private menuMove(dir: number): void {
+    const items = this.menuItems();
+    if (!items.length) return;
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const next = items[i < 0 ? (dir > 0 ? 0 : items.length - 1) : (i + dir + items.length) % items.length];
+    next?.focus({ preventScroll: true });
+    this.audio.sfx('ui');
+  }
+
+  /** The button a screen wants when nothing else is focused: FIGHT!, RESUME, READY, PLAY AGAIN. */
+  private menuPrimary(): HTMLElement | null {
+    const items = this.menuItems();
+    const active = document.activeElement as HTMLElement | null;
+    if (active && items.includes(active) && (active.tagName === 'BUTTON' || active.classList.contains('card'))) return active;
+    const marked = [...document.querySelectorAll<HTMLElement>(`#${this.screen} [data-primary]`)].filter((x) => x.offsetParent !== null);
+    return marked[0] ?? items.find((x) => x.tagName === 'BUTTON') ?? null;
+  }
+
+  menuConfirm(): void {
+    if (this.screen === 'title') { this.titleStart(); return; }
+    if (this.screen === 'none' || this.screen === 'loading' || this.screen === 'shop') return;
+    const el = this.menuPrimary();
+    if (!el) return;
+    this.audio.sfx('ok');
+    el.click();
+  }
+
+  menuCancel(): void {
+    if (this.screen === 'pause') { this.togglePause(); return; }
+    if (this.screen === 'none' || this.screen === 'loading' || this.screen === 'shop' || this.screen === 'title') return;
+    this.audio.sfx('ui');
+    this.goBack();
+  }
+
+  /** Keyboard presses that act on menus: LIGHT confirms, HEAVY cancels (Z / X). */
+  private menuKey(bit: number): void {
+    if (this.screen === 'none' || this.screen === 'loading' || this.screen === 'shop') return;
+    if (bit & (BTN.LIGHT | BTN.JUMP | BTN.START)) { this.menuConfirm(); return; }
+    if (bit & (BTN.HEAVY | BTN.GRAB)) this.menuCancel();
+  }
+
+  /** Gamepad presses in menus: A/X/Start confirm, B/Y cancel, d-pad or stick moves. */
+  private menuPad(bits: number): void {
+    if (this.screen === 'none' || this.screen === 'loading' || this.screen === 'shop') return;
+    if (bits & (BTN.DOWN | BTN.RIGHT)) this.menuMove(1);
+    else if (bits & (BTN.UP | BTN.LEFT)) this.menuMove(-1);
+    if (bits & (BTN.JUMP | BTN.LIGHT | BTN.START)) this.menuConfirm();
+    else if (bits & (BTN.GRAB | BTN.HEAVY)) this.menuCancel();
+  }
+
   // ------------------------------------------------------------------ loop
   frame(t: number): void {
     requestAnimationFrame((tt) => this.frame(tt));
@@ -617,6 +688,15 @@ class App {
     const c = this.client;
     if (c && c.status === 'game') {
       let inp = this.input.sample();
+      // while a game is running, menus still need the pad: pause, settings and how-to read it
+      const pad = this.input.uiPressed();
+      if (pad) this.menuPad(pad);
+      // Start (Enter, or the pad's Start) is the pause key on the street: it must not also
+      // reach the simulation, or pausing would swing a punch on the way in
+      if (this.screen === 'none' && (inp.pressed & BTN.START)) {
+        this.togglePause();
+        inp = { held: inp.held & ~BTN.START, pressed: inp.pressed & ~BTN.START };
+      }
       const v = c.latest();
       if (this.autopilot && v) {
         this.autopilot.pid = c.myId;
@@ -628,7 +708,11 @@ class App {
         c.input(inp.held, inp.pressed);
         c.link.tick?.();
       }
-    } else this.input.sample();
+    } else {
+      this.input.sample();
+      const pad = this.input.uiPressed();
+      if (pad) this.menuPad(pad);
+    }
     this.renderer.fx.step();
   }
 
@@ -642,6 +726,11 @@ class App {
       if (!loadSettings().shake) this.renderer.fx.shake = 0;
       this.renderer.shopSel = this.shopSel;
       this.renderer.shopMsg = this.shopMsg;
+      // townsfolk only walk the peaceful stretches; fighting sections get an empty street
+      const sec = CHAPTERS[v.chapter].sections[v.section];
+      this.renderer.crowd = this.crowd;
+      this.crowd.reset(`${v.chapter}.${v.section}`, sec.peace ? 5 : 0);
+      if (!this.paused) this.crowd.step(v.camX);
       this.renderer.render(v, !!this.client);
       this.dctx.drawImage(this.renderer.canvas, 0, 0);
       this.lastView = v;
@@ -655,9 +744,11 @@ class App {
           $('end-lobby').hidden = this.client.link.kind !== 'local' && !this.client.isHost;
           setTimeout(() => { if (this.ended && this.client) this.go('ended', false); }, 2500);
         }
-      } else this.audio.music('menu');
+      } else this.audio.music('title');
     } else {
       this.dctx.fillStyle = '#0e0a14'; this.dctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      // every out-of-game screen shares the title theme; the city theme takes over on start
+      if (this.screen !== 'loading' && this.screen !== 'pause') this.audio.music('title');
     }
     this.drawCards();
   }
@@ -665,9 +756,10 @@ class App {
   attractView: View | null = null;
   attractEvs: SimEvent[] = [];
 
+  /** One 2–3 minute theme per chapter, carried through both streets, the shop break and the
+   *  boss so it is never cut short by a section change. Only the victory sting interrupts it. */
   music(v: View): void {
     if (v.phase === 'victory') this.audio.music('victory');
-    else if (v.phase === 'bossintro' || v.phase === 'boss' || v.phase === 'bossdown') this.audio.music('boss');
     else if (v.phase === 'gameover' || v.phase === 'final') this.audio.stopMusic();
     else this.audio.music(CHAPTERS[v.chapter].music);
   }
@@ -702,7 +794,20 @@ class App {
         case 'throw': a.sfx('throw'); break;
         case 'land': { const t = ent(e.id); if (t && e.heavy) { fx.dust(t.x, t.z, true); a.sfx('thud'); } break; }
         case 'jump': if (isMe(e.id)) a.sfx('jump'); break;
-        case 'break': fx.debris(e.x, e.z, '#c8904a'); a.sfx('break'); break;
+        // props take three hits: chips fly off the first two, the third leaves a smashed pile
+        case 'prophit': fx.dust(e.x, e.z); a.sfx('thud'); break;
+        case 'break': {
+          const kind = v.props.find((p) => p.id === e.id)?.kind ?? 'crate';
+          const chip = { crate: '#c8904a', barrel: '#a8642a', box: '#c08a4a', bin: '#9a9aa6', mailbox: '#3a5ac0' }[kind] ?? '#c8904a';
+          // the pile is wide, so the dust rolls out to both sides of it
+          fx.debris(e.x, e.z, chip); fx.dust(e.x - 10, e.z, true); fx.dust(e.x + 10, e.z);
+          // whatever was inside pops out with a little shine (the reward read from the prop sheet)
+          fx.sparkle(e.x, 22, e.z, '#fff6c0');
+          fx.text(e.x, 38, e.z, 'SMASH!', '#f6e8b8');
+          fx.shake = Math.max(fx.shake, 2);
+          a.sfx('break');
+          break;
+        }
         case 'quip': fx.say(e.id, e.text); break;
         case 'phase': if (e.text) fx.say(e.id, e.text); fx.shake = 6; a.sfx('boss'); break;
         case 'levelup': { const t = ent(e.id); if (t) { fx.text(t.x, 60, t.z, 'LEVEL UP!', '#f0c818', true); fx.sparkle(t.x, 30, t.z, '#f0c818'); } a.sfx('levelup'); break; }

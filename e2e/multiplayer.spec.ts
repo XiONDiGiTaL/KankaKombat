@@ -118,9 +118,9 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   while (!inShop && Date.now() - t0 < 60_000) {
     const s = (await state(B.page))!;
     if (!s.me) { await B.page.waitForTimeout(200); continue; }
-    const dx = 620 - s.me.x, dz = 4 - s.me.z;
+    const dx = 707 - s.me.x, dz = 4 - s.me.z;
     if (Math.abs(dx) < 14 && Math.abs(dz) < 8 && ['idle', 'walk', 'run'].includes(s.me.st)) {
-      await B.page.keyboard.press('KeyL');
+      await B.page.keyboard.press('KeyS');
       inShop = await B.page.waitForFunction(() => (window as any).__kk.screen === 'shop', null, { timeout: 2_000 }).then(() => true, () => false);
       continue;
     }
@@ -138,8 +138,8 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   // bananas ($40) are the second item; press "buy" twice fast: only one may go through
   await B.page.keyboard.press('ArrowDown');
   await B.page.waitForTimeout(100);
-  await B.page.keyboard.press('KeyJ');
-  await B.page.keyboard.press('KeyJ');
+  await B.page.keyboard.press('KeyZ');
+  await B.page.keyboard.press('KeyZ');
   await B.page.waitForTimeout(1200);
   const after = (await state(B.page))!;
   const mineAfter = after.players.find((p) => p.pid === myPid)!;
@@ -155,7 +155,7 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   const hostView = (await state(A.page))!.players.find((p) => p.pid === myPid)!;
   expect(hostView.money).toBe(mineAfter.money);
   expect(hostView.bag).toEqual(mineAfter.bag);
-  await B.page.keyboard.press('KeyL');
+  await B.page.keyboard.press('KeyS');
   await B.page.waitForFunction(() => (window as any).__kk.screen !== 'shop');
 
   // disconnect: the host keeps playing alone

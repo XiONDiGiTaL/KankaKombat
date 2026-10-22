@@ -31,7 +31,7 @@
 
     <div id="title" class="screen">
       <canvas id="logo" width="320" height="96"></canvas>
-      <p class="blink" id="press" data-i18n="PRESS ENTER / TAP TO START">PRESS ENTER / TAP TO START</p>
+      <p class="blink" id="press" data-i18n="PRESS Z / ENTER / TAP TO START">PRESS Z / ENTER / TAP TO START</p>
       <p class="tiny credit" data-i18n="© XiØN / XiONDiGiTaL — original game, original art &amp; music">© XiØN / XiONDiGiTaL — original game, original art &amp; music</p>
     </div>
 
@@ -58,15 +58,15 @@
         <p class="tiny name-hint" id="name-hint">Your name, shown on the HUD.</p>
         <div class="row" id="debug-start" hidden>
           <label><span data-i18n="CHAPTER">CHAPTER</span> <select id="dbg-ch"><option value="0">1 New York</option><option value="1">2 İzmir</option><option value="2">3 İstanbul</option><option value="3">4 Tampa</option></select></label>
-          <label><span data-i18n="SECTION">SECTION</span> <select id="dbg-se"><option value="0">1</option><option value="1">2</option><option value="2">Boss</option></select></label>
+          <label><span data-i18n="SECTION">SECTION</span> <select id="dbg-se"><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">Boss</option></select></label>
         </div>
         <div class="row buttons" id="select-buttons">
           <button data-go="menu" class="ghost">BACK</button>
-          <button id="solo-start" class="primary">FIGHT!</button>
+          <button id="solo-start" class="primary" data-primary>FIGHT!</button>
         </div>
         <div class="row buttons" id="online-buttons" hidden>
           <button data-go="menu" class="ghost">BACK</button>
-          <button id="create-room" class="primary">CREATE ROOM</button>
+          <button id="create-room" class="primary" data-primary>CREATE ROOM</button>
           <input id="join-code" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false" />
           <button id="join-room">JOIN</button>
         </div>
@@ -82,7 +82,7 @@
         <div class="row"><span data-i18n="FIGHTER">FIGHTER</span><button id="pick-bt" class="pick">B.T.</button><button id="pick-sc" class="pick">S.C.</button></div>
         <div class="row buttons">
           <button id="leave-room" class="ghost">LEAVE</button>
-          <button id="ready-btn">READY</button>
+          <button id="ready-btn" data-primary>READY</button>
           <button id="start-btn" class="primary">START</button>
         </div>
         <p class="tiny" id="lobby-msg">Share the code or link. Everyone readies up, then the host starts.</p>
@@ -96,7 +96,7 @@
           <div>
             <h3><span data-i18n="CONTROLS">CONTROLS</span> <span class="tiny" data-i18n="(click a key to remap)">(click a key to remap)</span></h3>
             <table id="keytable" class="keys"></table>
-            <p class="tiny" data-i18n="Gamepad: D-pad/stick move · X light · Y heavy · A jump · B grab · RB block · LB dodge · RT run · LT eat · Back next item · Start start.">Gamepad: D-pad/stick move · X light · Y heavy · A jump · B grab · RB block · LB dodge · RT run · LT eat · Back next item · Start start.</p>
+            <p class="tiny" data-i18n="Gamepad: D-pad/stick move · A jump / confirm · B grab / cancel · X light · Y heavy · LB dodge · RB block · LT eat · RT run · Back next item · Start pause.">Gamepad: D-pad/stick move · A jump / confirm · B grab / cancel · X light · Y heavy · LB dodge · RB block · LT eat · RT run · Back next item · Start pause.</p>
             <button id="reset-keys" class="ghost small" data-i18n="RESET KEYS">RESET KEYS</button>
           </div>
           <div>
@@ -147,7 +147,7 @@
         <h2 data-i18n="PAUSED">PAUSED</h2>
         <p class="tiny" id="pause-note"></p>
         <nav class="list">
-          <button id="resume">RESUME</button>
+          <button id="resume" data-primary>RESUME</button>
           <button data-go="howto">HOW TO PLAY</button>
           <button data-go="settings">SETTINGS</button>
           <button id="quit">QUIT TO TITLE</button>
@@ -157,7 +157,7 @@
 
     <div id="ended" class="screen overlay">
       <div class="panel center">
-        <div class="row buttons"><button id="end-title">TITLE SCREEN</button><button id="end-lobby" class="primary">BACK TO LOBBY</button></div>
+        <div class="row buttons"><button id="end-title">TITLE SCREEN</button><button id="end-lobby" class="primary" data-primary>BACK TO LOBBY</button></div>
       </div>
     </div>
 

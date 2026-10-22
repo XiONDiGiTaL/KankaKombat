@@ -13,7 +13,7 @@ import { GamePhase, SimEvent, St, STATES } from './types';
 export const DEFS: string[] = [...FIGHTER_IDS, ...Object.keys(ENEMIES)];
 export const ATK_IDS: string[] = Object.keys(ATTACKS);
 export const PROP_KINDS = ['crate', 'barrel', 'bin', 'box', 'mailbox'];
-export const HAZARD_KINDS = ['tram', 'bike', 'taxi', 'golfcart'];
+export const HAZARD_KINDS = ['tram', 'bike', 'taxi', 'golfcart', 'delivery'];
 const PHASES: GamePhase[] = ['lobby', 'intro', 'play', 'clear', 'bossintro', 'boss', 'bossdown', 'chapterclear', 'gameover', 'final', 'victory'];
 
 export const F_INV = 1, F_HOLD = 2, F_BOSS = 4, F_POWER = 8, F_SPEED = 16, F_RISING = 32, F_PLAYER = 64;

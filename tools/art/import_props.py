@@ -34,7 +34,7 @@ OUT = os.path.join(ROOT, "public", "assets", "props")
 
 ITEM_TILE = 18          # square tile, bottom aligned, matches the old 16x12 pickups
 ITEM_INSET = 1          # empty pixel row kept under every icon
-CART_W = 54             # the cart reads at the taxi's width ...
+CART_W = 70             # a hazard has to read as a real vehicle next to a 55px fighter
 CART_PALETTE = 32
 
 # grid order of the food page, left to right then top to bottom

@@ -1,20 +1,23 @@
 // Draws a View (decoded, interpolated snapshot) into the 384x216 game canvas.
 
 import { SCREEN_H, SCREEN_W, STREET_TOP, MAX_LIVES, BAG_SLOTS } from '../../shared/data/constants';
-import { CHAPTERS } from '../../shared/data/stages';
+import { CHAPTERS, ShopSpot } from '../../shared/data/stages';
 import { ENEMIES } from '../../shared/data/enemies';
 import { FIGHTERS } from '../../shared/data/fighters';
 import { ATTACKS } from '../../shared/data/attacks';
-import { SHOPS } from '../../shared/data/shops';
+import { SHOPS, ShopStyle } from '../../shared/data/shops';
 import { ITEMS } from '../../shared/data/items';
 import { formatMoney } from '../../shared/data/currency';
 import { phaseOf } from '../../shared/sim/combat';
 import { F_INV, View, ViewEnt, ViewPlayer } from '../../shared/sim/snapshot';
-import { BgLayers, buildBackground } from './backgrounds';
-import { artCanvas, drawItem, propFrame } from './art';
+import { BgLayers, buildBackground, drawShopBooth, shopStyleFor } from './backgrounds';
+import { artCanvas, drawItem, hazardSize, propArt, propFrame } from './art';
 import { drawText, textWidth } from './font';
 import { Fx } from './fx';
 import { frameFor, getSheet } from './sprites';
+import { npcAnchor, npcFrame } from './npcs';
+import { MIRRORED, paintedShop, stageFor, stageIdFor, type StageArt } from './stages';
+import type { Crowd } from '../ambient';
 import { t } from '../i18n';
 
 export const SLOT_COLORS = ['#f04a4a', '#4a9af0', '#4ad06a', '#f0c83a'];
@@ -27,6 +30,7 @@ export class Renderer {
   private bgKey = '';
   private frame = 0;
   localPid = '';
+  crowd: Crowd | null = null;
   shopSel = 0;
   shopMsg = '';
   private tags = true;
@@ -38,11 +42,24 @@ export class Renderer {
     this.ctx.imageSmoothingEnabled = false;
   }
 
+  /** The imported stage strip behind this section. It tiles from world x=0, which is how the
+   *  painted doorways and stalls line up with the shop spots the simulation knows about. */
+  private stage: StageArt | null = null;
+  private stageStyle: ShopStyle = 'ny';
+  /** Spots the strip does not paint, so the renderer stands a booth of its own there. */
+  private stageShops: ShopSpot[] = [];
+  /** Panorama strips repeat alternately mirrored, so their joins have no seam. */
+  private stageMirror = false;
+
   private ensureBg(v: View): void {
     const key = `${v.chapter}.${v.section}`;
     if (key === this.bgKey) return;
     const sec = CHAPTERS[v.chapter].sections[v.section];
     this.bg = buildBackground(sec.theme, sec, 1000 + v.chapter * 10 + v.section);
+    this.stage = stageFor(sec.theme);
+    this.stageStyle = shopStyleFor(sec.theme);
+    this.stageMirror = !!this.stage && MIRRORED.has(stageIdFor(sec.theme) ?? '');
+    this.stageShops = this.stage ? sec.shops.filter((s) => !paintedShop(this.stage!, s.x, this.stageMirror)) : [];
     this.bgKey = key;
   }
 
@@ -67,6 +84,31 @@ export class Renderer {
 
   private drawBackground(cam: number): void {
     const c = this.ctx, b = this.bg!;
+    if (this.stage) {
+      // one painted strip, scrolled 1:1 and repeated along the section
+      const tile = this.stage.meta.w;
+      const shift = ((cam % tile) + tile) % tile;
+      const first = Math.floor(cam / tile);
+      for (let i = 0, x = -shift; x < SCREEN_W; i++, x += tile) {
+        const n = first + i;
+        const px = Math.round(x);
+        if (this.stageMirror && Math.abs(n % 2) === 1) {
+          // ping-pong: an odd tile is its own mirror image, so its left edge matches the
+          // right edge of the tile before it and the panorama reads on without a join
+          c.save(); c.translate(px + tile, 0); c.scale(-1, 1);
+          c.drawImage(this.stage.img, 0, 0);
+          c.restore();
+        } else c.drawImage(this.stage.img, px, 0);
+      }
+      // shops this stage does not paint get a booth standing on its pavement
+      if (this.stageShops.length) {
+        c.save();
+        c.translate(-cam, 0);
+        for (const s of this.stageShops) drawShopBooth(c, s, this.stageStyle);
+        c.restore();
+      }
+      return;
+    }
     c.drawImage(b.sky, 0, 0);
     c.drawImage(b.far, -Math.round(cam * b.farF), 0);
     c.drawImage(b.mid, -Math.round(cam * b.midF), 0);
@@ -80,32 +122,57 @@ export class Renderer {
     const list: D[] = [];
     const sy = (z: number, y: number) => Math.round(STREET_TOP + z - y);
     const sx = (x: number) => Math.round(x - cam);
+    const meEarly = this.localEnt(v);
+
+    // A shop you can walk into has to say so from across the street: a gold tag with the city's
+    // coin, a chevron bobbing down at the doorway and a lit threshold on the pavement.
+    if (v.phase === 'play' || v.phase === 'intro' || v.phase === 'clear') {
+      const sec = CHAPTERS[v.chapter].sections[v.section];
+      for (const s of sec.shops) {
+        const x = sx(s.x);
+        if (x < -60 || x > SCREEN_W + 60) continue;
+        const near = !!meEarly && Math.abs(meEarly.x - s.x) < 66;
+        this.shopMarker(x, STREET_TOP - 88, v.cur, this.frame + s.x, near);
+      }
+    }
 
     // hazard lanes: warning stripes before the vehicle arrives
     for (const h of v.hazards) {
       if (h.state === 1 && this.frame % 16 < 10) {
         const y0 = sy(h.z0, 0), y1 = sy(h.z1, 0);
         c.globalAlpha = 0.35; c.fillStyle = '#f0c818'; c.fillRect(0, y0, SCREEN_W, y1 - y0 + 4); c.globalAlpha = 1;
-        const label = { tram: 'TRAM!', bike: 'BIKE!', taxi: 'TAXI!', golfcart: 'GOLF CART!' }[h.kind] ?? 'LOOK OUT!';
+        const label = { tram: 'TRAM!', bike: 'BIKE!', taxi: 'TAXI!', golfcart: 'GOLF CART!', delivery: 'COURIER!' }[h.kind] ?? 'LOOK OUT!';
         drawText(c, '! ' + label, h.dir === 1 ? 8 : SCREEN_W - 8, y0 - 2, '#f0c818', { align: h.dir === 1 ? 'left' : 'right', outline: true });
       }
       if (h.state === 2) {
         const z = (h.z0 + h.z1) / 2;
-        // the cart's four frames turn its wheels, so they are picked by distance travelled
-        const cart = h.kind === 'golfcart' ? propFrame('golfcart', Math.floor(Math.abs(h.x) / 6), h.dir === -1) : null;
-        if (cart) {
-          list.push({ z: z + 0.5, draw: () => c.drawImage(cart.img, cart.sx, cart.sy, cart.w, cart.h,
-            sx(h.x) - Math.round(cart.w / 2), sy(z, 0) - cart.h + 2, cart.w, cart.h) });
-        } else {
-          const art = artCanvas(h.kind, h.dir === -1);
-          list.push({ z: z + 0.5, draw: () => { c.drawImage(art, sx(h.x) - Math.round(art.width / 2), sy(z, 0) - art.height + 4); } });
-        }
+        // every vehicle is drawn into its declared footprint: same ground contact, same
+        // weight on screen, and an imported sprite of any resolution slots straight in
+        const [bw, bh] = hazardSize(h.kind);
+        // every vehicle is a four-frame strip whose wheels/limbs turn with distance travelled
+        const frame = propFrame(h.kind, Math.floor(Math.abs(h.x) / 6), h.dir === -1);
+        const img = frame ? frame.img : artCanvas(h.kind, h.dir === -1);
+        const srcX = frame ? frame.sx : 0, srcY = frame ? frame.sy : 0;
+        const srcW = frame ? frame.w : img.width, srcH = frame ? frame.h : img.height;
+        list.push({ z: z + 0.5, draw: () => {
+          this.shadow(sx(h.x), sy(z, 0), Math.round(bw / 2) - 8);
+          const was = c.imageSmoothingEnabled;
+          c.imageSmoothingEnabled = false;
+          c.drawImage(img, srcX, srcY, srcW, srcH, sx(h.x) - Math.round(bw / 2), sy(z, 0) - bh + 2, bw, bh);
+          c.imageSmoothingEnabled = was;
+        } });
       }
     }
     for (const p of v.props) {
       list.push({ z: p.z, draw: () => {
-        if (p.broken) { if (p.brokeT < 600) c.drawImage(artCanvas('debris'), sx(p.x) - 6, sy(p.z, 0) - 3); return; }
-        const art = artCanvas(p.kind);
+        // intact -> damaged -> smashed, exactly the three states the prop art carries
+        if (p.broken) {
+          const pile = artCanvas(propArt(p.kind, 0));
+          const shake = p.brokeT < 8 ? (p.brokeT % 2 ? 1 : -1) : 0;
+          c.drawImage(pile, sx(p.x) - Math.round(pile.width / 2) + shake, sy(p.z, 0) - pile.height + 2);
+          return;
+        }
+        const art = artCanvas(propArt(p.kind, p.hp, p.maxHp));
         this.shadow(sx(p.x), sy(p.z, 0), art.width / 2 + 1);
         c.drawImage(art, sx(p.x) - Math.round(art.width / 2), sy(p.z, 0) - art.height + 2);
       } });
@@ -119,6 +186,18 @@ export class Renderer {
         c.drawImage(art, sx(pk.x) - Math.round(art.width / 2), sy(pk.z, pk.y) - art.height + 1 + bob);
         if (pk.kind === 'coin' && this.frame % 40 < 4) { c.fillStyle = '#ffffff'; c.fillRect(sx(pk.x) + 1, sy(pk.z, pk.y) - 4, 1, 1); }
       } });
+    }
+    // townsfolk: scenery with a walk cycle, drawn in depth like everyone else
+    if (this.crowd?.walkers.length) {
+      const [ax, ay] = npcAnchor();
+      for (const w of this.crowd.walkers) {
+        const f = npcFrame(w.npc, Math.floor(w.walk / 8), w.dir === -1);
+        if (!f) continue;
+        list.push({ z: w.z, draw: () => {
+          this.shadow(sx(w.x), sy(w.z, 0), 7);
+          c.drawImage(f.img, f.sx, f.sy, f.w, f.h, sx(w.x) - ax, sy(w.z, 0) - ay, f.w, f.h);
+        } });
+      }
     }
     for (const pj of v.projs) list.push({ z: pj.z, draw: () => { this.shadow(sx(pj.x), sy(pj.z, 0), 2); const a = artCanvas(pj.kind); c.drawImage(a, sx(pj.x) - 2, sy(pj.z, pj.y) - 3); } });
     for (const e of v.ents) list.push({ z: e.z + (e.st === 'held' ? 0.2 : 0), draw: () => this.drawEnt(v, e, sx(e.x), sy(e.z, e.y), sy(e.z, 0)) });
@@ -137,6 +216,43 @@ export class Renderer {
     }
     // speech bubbles
     for (const e of v.ents) if (this.fx.bubbles.some((b) => b.id === e.id)) this.fx.drawBubble(c, e.id, sx(e.x), sy(e.z, e.y) - (e.flags & 4 ? 70 : 52));
+  }
+
+  /** The shop affordance: a bobbing `SHOP` tag carrying the local coin, an arrow pointing at
+   *  the door, and a warm threshold on the pavement underneath it. */
+  private shopMarker(x: number, y: number, cur: string, phase: number, near: boolean): void {
+    const c = this.ctx;
+    const bob = Math.round(Math.sin(phase / 17) * 2);
+    const label = 'SHOP';
+    const tw = textWidth(label);
+    const w = 8 + tw + 12;
+    const yy = y + bob;
+    // plate, dark with a gold rim; it turns bright as the player walks up to the door
+    c.fillStyle = '#141019'; c.fillRect(x - Math.round(w / 2) - 1, yy - 1, w + 2, 13);
+    c.fillStyle = near ? '#f6e8b8' : '#2a1c26'; c.fillRect(x - Math.round(w / 2), yy, w, 11);
+    c.fillStyle = near ? '#f0a020' : '#f0c040';
+    c.fillRect(x - Math.round(w / 2), yy, w, 1); c.fillRect(x - Math.round(w / 2), yy + 10, w, 1);
+    // the city's own coin, punched into the tag: a gold disc with the currency mark
+    const cx = x - Math.round(w / 2) + 5, cy = yy + 5;
+    c.fillStyle = '#8a5a12';
+    for (let r = -4; r <= 4; r++) { const hw = Math.round(Math.sqrt(16 - r * r)); c.fillRect(cx - hw, cy + r, hw * 2 + 1, 1); }
+    c.fillStyle = '#f0c040';
+    for (let r = -3; r <= 3; r++) { const hw = Math.round(Math.sqrt(9 - r * r)); c.fillRect(cx - hw, cy + r, hw * 2 + 1, 1); }
+    c.fillStyle = '#fff0b8'; c.fillRect(cx - 2, cy - 3, 2, 1);
+    drawText(c, cur === 'TRY' ? '₺' : '$', cx, cy - 3, '#4a2c04', { align: 'center', shadow: null });
+    drawText(c, label, x - Math.round(w / 2) + 11, yy + 2, near ? '#3a2408' : '#f0c040', { shadow: null });
+    // chevron under the tag, pointing at the door
+    const ay = yy + 15;
+    c.fillStyle = '#141019'; c.fillRect(x - 4, ay - 1, 9, 4);
+    c.fillStyle = near ? '#f6e8b8' : '#f0c040';
+    c.fillRect(x - 4, ay, 9, 1); c.fillRect(x - 3, ay + 1, 7, 1); c.fillRect(x - 2, ay + 2, 5, 1); c.fillRect(x - 1, ay + 3, 3, 1);
+    // lit threshold on the pavement in front of the door, so the entrance reads from afar
+    const t = 0.22 + (near ? 0.3 : 0.1) + Math.sin(phase / 22) * 0.05;
+    c.globalAlpha = t;
+    c.fillStyle = '#ffe8a0';
+    c.fillRect(x - 19, STREET_TOP + 1, 38, 3);
+    c.fillRect(x - 14, STREET_TOP + 4, 28, 2);
+    c.globalAlpha = 1;
   }
 
   private prompt(x: number, y: number, text: string): void {

@@ -3,6 +3,7 @@ import { arena, run, until } from './helpers';
 import { Sim } from '../src/shared/sim/sim';
 import { Bot } from '../src/shared/sim/bot';
 import { CHAPTERS } from '../src/shared/data/stages';
+import { THEMES } from '../src/shared/data/music';
 import { START_LIVES } from '../src/shared/data/constants';
 
 describe('lives, respawn and game over', () => {
@@ -56,7 +57,7 @@ describe('stage flow', () => {
   });
 
   it('defeating a boss clears the chapter and moves on; cash carries over and the local symbol changes', () => {
-    const sim = new Sim({ seed: 3, chapter: 1, section: 2 });
+    const sim = new Sim({ seed: 3, chapter: 1, section: 3 });
     const p = sim.addPlayer('p0', 'sc');
     sim.start();
     p.money = 345;
@@ -77,6 +78,62 @@ describe('stage flow', () => {
     expect(new Set(themes).size).toBe(themes.length);
     for (const c of CHAPTERS) expect(c.sections.filter((s) => s.shops.length).length).toBeGreaterThanOrEqual(1);
   });
+
+  it('gives every chapter one peaceful stretch, between two fights and the boss', () => {
+    for (const c of CHAPTERS) {
+      const idx = c.sections.map((s, i) => (s.peace ? i : -1)).filter((i) => i >= 0);
+      expect(idx, `${c.id} has one plaza`).toHaveLength(1);
+      const peace = c.sections[idx[0]];
+      // a town is not a fight: nothing spawns, nothing runs the player down
+      expect(peace.waves).toEqual([]);
+      expect(peace.hazards ?? []).toEqual([]);
+      expect(peace.boss).toBeUndefined();
+      // and it is where the money goes: both a shop front and a stall
+      expect(peace.shops.length).toBeGreaterThanOrEqual(2);
+      // it sits after a fighting street and before the boss arena
+      const before = c.sections.slice(0, idx[0]);
+      const after = c.sections.slice(idx[0] + 1);
+      expect(before.some((s) => s.waves.length), `${c.id} fights before the plaza`).toBe(true);
+      expect(after.some((s) => s.boss), `${c.id} boss after the plaza`).toBe(true);
+    }
+  });
+});
+
+describe('stage pacing', () => {
+  // Each chapter carries one supplied theme (2:18–2:57 long), so a chapter has to run long
+  // enough for that track to play through instead of being cut off by the clear screen, and
+  // short enough that it is not a second full loop. Measured from the start of the first
+  // street to the chapter-clear screen, with two bots playing through the real input path.
+  // A solo run plays the same content with one fighter, so it runs longer and the theme
+  // loops once; the co-op pace is the one the soundtrack is cut to.
+  it('every chapter plays its whole theme and clears in about two to three minutes', () => {
+    const seconds: Record<string, number> = {};
+    for (let ch = 0; ch < CHAPTERS.length; ch++) {
+      const sim = new Sim({ seed: 42, chapter: ch, section: 0 });
+      const bots = [new Bot('a', 0), new Bot('b', 1)];
+      sim.addPlayer('a', 'bt'); sim.addPlayer('b', 'sc');
+      sim.start();
+      let cleared = 0;
+      for (let i = 0; i < 60 * 60 * 12 && !cleared; i++) {
+        for (const b of bots) sim.setInput(b.pid, b.think(sim));
+        sim.step();
+        if (sim.phase === 'chapterclear' || sim.phase === 'victory') cleared = i;
+        if (sim.phase === 'gameover' || sim.phase === 'final') break;
+      }
+      expect(cleared, `${CHAPTERS[ch].id} never cleared`).toBeGreaterThan(0);
+      seconds[CHAPTERS[ch].id] = cleared / 60;
+    }
+    for (const [id, s] of Object.entries(seconds)) {
+      const theme = THEMES[CHAPTERS.find((c) => c.id === id)!.music].seconds;
+      // the outro's last bars may land just after the clear screen, but no chapter may end
+      // a whole verse early — that is the track being skipped, which is what this guards
+      expect(s, `${id} cleared in ${s.toFixed(1)}s, theme ${theme}s`).toBeGreaterThanOrEqual(theme - 15);
+      // and it stays inside one playthrough plus a short tail, not a second loop
+      expect(s, `${id} cleared in ${s.toFixed(1)}s, theme ${theme}s`).toBeLessThanOrEqual(theme + 60);
+      expect(s, `${id} cleared in ${s.toFixed(1)}s`).toBeGreaterThanOrEqual(120);
+      expect(s, `${id} cleared in ${s.toFixed(1)}s`).toBeLessThanOrEqual(200);
+    }
+  }, 120_000);
 });
 
 describe('full campaign (autopilot through real inputs)', () => {

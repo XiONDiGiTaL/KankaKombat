@@ -106,7 +106,16 @@ Leave HTML on the default (`max-age=600` from Pages) so a new deploy shows up wi
 minutes; `dist/assets/*` names change on every build anyway. `og.png`, `favicon.png` and
 `/fonts/*` can take a shorter custom TTL (a day) if they are hit often.
 
+The soundtrack sits under that same rule (`/kankakombat/assets/music/*.mp3`) but its
+filenames are **not** content-hashed. Replacing a track under the same name leaves the old
+file cached at the edge for up to a year, so give the new master a new name (for example
+`nyc-v2.mp3`) and update `src/shared/data/music.ts`, or purge those URLs after the deploy.
+
 ## 4. Verify
+
+`npm run verify:live` runs all three checks below in one pass (redirect, edge cache
+headers on a hashed asset, and the deployed fighter select) and exits non-zero if any
+fails. The equivalent one-liners:
 
 ```bash
 # proxy is on
@@ -123,8 +132,11 @@ curl -sI "https://xiondigital.net/KankaKombat/index.html"        # 301 + Locatio
 curl -sI https://xiondigital.net/kankakombat/                    # 200
 ```
 
-Then load the game in a browser and confirm the title screen, a room create/join, and no
-console errors — a proxy change shows up as mixed-content or redirect loops first.
+The script already loads the game and fails on console errors or 404s; to check a
+room create/join by hand, open the title screen in a browser. A proxy change shows up as
+mixed-content or redirect loops first. Give the audio one manual listen: the title theme
+should start on the first click, and a chapter's city theme should carry into its boss
+fight instead of going silent.
 
 ## Caveats
 

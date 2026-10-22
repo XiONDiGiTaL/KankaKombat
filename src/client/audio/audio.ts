@@ -1,7 +1,10 @@
-// Original chiptune music and procedural sound effects, synthesised with WebAudio.
-// No audio files: every note below was written for this game.
+// Supplied city/title themes streaming from public/assets/music, plus the original
+// chiptune fallback and every procedural sound effect. The five supplied tracks are
+// mastered MP3s (see shared/data/music.ts); the TRACKS below stay as the fallback when
+// a file cannot be fetched and for the short victory sting.
 
 import { loadSettings, saveSettings } from '../settings';
+import { MUSIC_DIR, THEMES, type ThemeId } from '../../shared/data/music';
 
 type Voice = 'square' | 'triangle' | 'sawtooth' | 'sine';
 interface Track { bpm: number; lead: string; bass: string; drums: string; harm?: string; leadVoice?: Voice; swing?: number }
@@ -48,12 +51,6 @@ const TRACKS: Record<string, Track> = {
     bass: 'F2 . F3 . F2 . F3 . F2 . F3 . F2 . F3 . C2 . C3 . C2 . C3 . C2 . C3 . C2 . C3 . D2 . D3 . D2 . D3 . D2 . D3 . D2 . D3 . Bb1 . Bb2 . Bb1 . Bb2 . C2 . C3 . C2 . E2 .',
     drums: 'K . H . S . H . K . H K S . H . K . H . S . H . K . H K S . S S',
   },
-  boss: {
-    bpm: 152, leadVoice: 'sawtooth',
-    lead: 'C5 . C5 . Eb5 . C5 . G5 - F5 - Eb5 - D5 - C5 . C5 . Eb5 . C5 . Ab5 - G5 - F5 - G5 - C5 . C5 . Eb5 . C5 . G5 - F5 - Eb5 - D5 - B4 - D5 - F5 - G5 - - - G5 - Ab5 - B5 -',
-    bass: 'C2 C2 C3 C2 C2 C3 C2 C3 C2 C2 C3 C2 Bb1 Bb2 B1 B2 C2 C2 C3 C2 C2 C3 C2 C3 Ab1 Ab1 Ab2 Ab1 G1 G2 G1 G2 C2 C2 C3 C2 C2 C3 C2 C3 C2 C2 C3 C2 Bb1 Bb2 B1 B2 G1 G1 G2 G1 G1 G2 G1 G2 G1 G1 G2 G1 G1 G2 B1 D2',
-    drums: 'K H S H K K S H K H S H K S S S K H S H K K S H K H S H K S K S',
-  },
   victory: {
     bpm: 140, leadVoice: 'square',
     lead: 'C5 E5 G5 C6 - - G5 - C6 - - - . . . . A5 - B5 - C6 - D6 - E6 - - - - - - -',
@@ -61,6 +58,17 @@ const TRACKS: Record<string, Track> = {
     drums: 'K . H . S . H . K . H . S . H . K . H . S . H . K . K . S S S S',
   },
 };
+
+/** One theme per city (named after the chapter's `music` id) and the title theme. */
+const MUSIC_FILES: Record<string, string> = Object.fromEntries(
+  Object.entries(THEMES).map(([id, t]) => [id, MUSIC_DIR + t.file]),
+);
+
+/** Synth-only ids: the chiptune menu loop used as the title fallback and the victory sting. */
+type SynthId = 'menu' | 'victory';
+export type MusicId = ThemeId | SynthId;
+
+interface FileTrack { el: HTMLAudioElement; gain: GainNode }
 
 export type Sfx = 'light' | 'heavy' | 'whiff' | 'block' | 'grab' | 'throw' | 'land' | 'coin' | 'eat' | 'oneup' | 'buy' | 'error' | 'ui' | 'ok' | 'ko' | 'boss' | 'horn' | 'bell' | 'jump' | 'levelup' | 'go' | 'break' | 'pause' | 'thud' | 'toss';
 
@@ -70,12 +78,16 @@ export class Audio {
   private musicGain!: GainNode;
   private sfxGain!: GainNode;
   private noise!: AudioBuffer;
-  private current = '';
+  private current: MusicId | '' = '';
   private step = 0;
   private nextTime = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastPlayed = new Map<string, number>();
   private voices = 0;
+  private files = new Map<string, FileTrack>();
+  private file: FileTrack | null = null;
+  private fileName = '';
+  private broken = new Set<string>();
 
   unlock(): void {
     if (this.ctx) { if (this.ctx.state === 'suspended') void this.ctx.resume(); return; }
@@ -106,18 +118,92 @@ export class Audio {
   toggleMute(): boolean { const m = !loadSettings().muted; saveSettings({ muted: m }); this.applyVolumes(); return m; }
 
   // ------------------------------------------------------------------ music
-  music(name: string): void {
+  music(name: MusicId): void {
     if (name === this.current) return;
     this.current = name;
+    if (!this.ctx) return;       // unlock() replays the requested track after a gesture
+    this.startMusic(name);
+  }
+
+  /** Swap to `name`: fade the outgoing stream (or stop the synth), then start the new one.
+   *  File tracks are cached, so returning to a theme resumes where it was paused. */
+  private startMusic(name: MusicId): void {
+    if (this.file && this.fileName === name) return;
+    if (this.file) this.fadeOutFile();
+    this.stopSynth();
+    const url = MUSIC_FILES[name as string];
+    if (url && !this.broken.has(name)) { this.fileName = name; this.startFile(name, url); return; }
+    this.fileName = '';
+    this.startSynth(name);
+  }
+
+  /** Stream a supplied track through its own gain node so it can cross-fade against the
+   *  synth and the previous city theme. */
+  private openFile(name: string, url: string): FileTrack {
+    // `new Audio()` would resolve to this module's class, not the DOM element, so build one
+    const el = document.createElement('audio');
+    el.src = url;
+    el.loop = true;
+    el.preload = 'auto';
+    const gain = this.ctx!.createGain();
+    gain.gain.value = 0;
+    this.ctx!.createMediaElementSource(el).connect(gain);
+    gain.connect(this.musicGain);
+    el.addEventListener('error', () => this.fileFailed(name));
+    const track = { el, gain };
+    this.files.set(name, track);
+    return track;
+  }
+
+  private startFile(name: string, url: string): void {
+    const ctx = this.ctx!;
+    const track = this.files.get(name) ?? this.openFile(name, url);
+    this.file = track;
+    const now = ctx.currentTime;
+    track.gain.gain.cancelScheduledValues(now);
+    track.gain.gain.setValueAtTime(0, now);
+    track.gain.gain.linearRampToValueAtTime(1, now + 0.8);
+    const playing = track.el.play();
+    if (playing) void playing.catch(() => { /* the next user gesture retries via unlock() */ });
+  }
+
+  private fadeOutFile(): void {
+    const track = this.file;
+    if (!track || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    track.gain.gain.cancelScheduledValues(now);
+    track.gain.gain.setValueAtTime(track.gain.gain.value, now);
+    track.gain.gain.linearRampToValueAtTime(0, now + 0.5);
+    this.file = null;
+    this.fileName = '';
+    setTimeout(() => { if (this.file !== track) track.el.pause(); }, 620);
+  }
+
+  /** A missing or undecodable file drops back to the chiptune for that id instead of
+   *  leaving the game silent. */
+  private fileFailed(name: string): void {
+    if (this.broken.has(name)) return;
+    this.broken.add(name);
+    console.warn(`music: could not load ${MUSIC_FILES[name] ?? name}; using the chiptune fallback`);
+    if (this.current !== name) return;
+    this.current = '';
+    this.music(TRACKS[name] ? (name as MusicId) : 'menu');
+  }
+
+  private startSynth(name: MusicId): void {
     this.step = 0;
-    if (!this.ctx) return;
-    this.nextTime = this.ctx.currentTime + 0.08;
-    if (this.timer) clearInterval(this.timer);
+    this.nextTime = this.ctx!.currentTime + 0.08;
     if (!TRACKS[name]) return;
     this.timer = setInterval(() => this.schedule(), 25);
   }
 
-  stopMusic(): void { this.current = ''; if (this.timer) clearInterval(this.timer); this.timer = null; }
+  private stopSynth(): void { if (this.timer) clearInterval(this.timer); this.timer = null; }
+
+  stopMusic(): void {
+    this.current = '';
+    this.fadeOutFile();
+    this.stopSynth();
+  }
 
   private schedule(): void {
     const ctx = this.ctx!; const tr = TRACKS[this.current];

@@ -5,9 +5,9 @@
 
 import { SCREEN_H, SCREEN_W, STREET_TOP } from '../../shared/data/constants';
 import { SectionDef, ShopSpot } from '../../shared/data/stages';
-import { SHOPS } from '../../shared/data/shops';
+import { SHOPS, ShopStyle } from '../../shared/data/shops';
 import { Rng } from '../../shared/sim/rng';
-import { drawText } from './font';
+import { drawText, titleWidth } from './font';
 
 export interface BgLayers { sky: HTMLCanvasElement; far: HTMLCanvasElement; mid: HTMLCanvasElement; near: HTMLCanvasElement; floor: HTMLCanvasElement; fg: HTMLCanvasElement; farF: number; midF: number; fgF: number }
 
@@ -42,6 +42,28 @@ function sky(c: Ctx, bands: string[], h: number, stars = 0, rng?: Rng): void {
     P(c, x, y, rng.chance(0.4) ? '#fff6c0' : '#c8d0ff');
     if (rng.chance(0.12)) { P(c, x + 1, y, '#8a90c0'); P(c, x, y + 1, '#8a90c0'); }
   }
+}
+
+/** Long, thin cloud bars: the sunset and dawn streaks the concept strips use instead of puffs. */
+function streakClouds(c: Ctx, w: number, rng: Rng, y0: number, y1: number, col: string, hi: string): void {
+  for (let i = 0; i < Math.max(3, Math.round(w / 60)); i++) {
+    const y = rng.int(y0, y1), x = rng.int(-20, w), len = rng.int(18, 70);
+    R(c, x, y, len, 2, col);
+    R(c, x + 4, y, Math.max(4, len - 12), 1, hi);
+    if (rng.chance(0.4)) R(c, x + rng.int(0, Math.max(1, len - 12)), y - 2, rng.int(8, 22), 1, col);
+  }
+}
+
+/** A few 1px spokes around a low sun, so the disc reads as light rather than a sticker. */
+function sunRays(c: Ctx, cx: number, cy: number, r: number, col: string): void {
+  c.globalAlpha = 0.2;
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2 + 0.1;
+    const x0 = cx + Math.cos(a) * (r + 3), y0 = cy + Math.sin(a) * (r + 3);
+    const len = r + (k % 2 ? 16 : 8);
+    for (let t = 0; t < len; t += 2) P(c, x0 + Math.cos(a) * t, y0 + Math.sin(a) * t, col);
+  }
+  c.globalAlpha = 1;
 }
 
 function disc(c: Ctx, cx: number, cy: number, r: number, col: string, top = false): void {
@@ -110,12 +132,18 @@ function awning(c: Ctx, x: number, y: number, w: number, a: string, b: string, s
 
 function signBoard(c: Ctx, x: number, y: number, text: string, bg: string, fg: string, w?: number, font = false): void {
   const tw = Math.max(20, text.length * 6 + 6);
-  const ww = w ?? tw;
-  R(c, x - ww / 2 - 1, y - 1, ww + 2, 11, OUT);
-  R(c, x - ww / 2, y, ww, 9, bg);
+  // never draw lettering outside its board: the box grows to the text, whatever the caller asked for
+  const ww = Math.max(w ?? tw, tw, font ? titleWidth(text) + 8 : 0);
+  // signage keeps a flat fill (a two-tone bevel would darken the lower rows into the board)
+  const hh = font ? 11 : 9;
+  R(c, x - ww / 2 - 1, y - 1, ww + 2, hh + 2, OUT);
+  R(c, x - ww / 2, y, ww, hh, bg);
   R(c, x - ww / 2, y, ww, 1, '#ffffff40');
-  if (font) drawText(c, text, x, y + 1, fg, { align: 'center', shadow: null, font: 'title' });
-  else drawText(c, text, x, y + 1, fg, { align: 'center', shadow: null });
+  // long names on a narrow booth sign drop to the compact HUD face rather than
+  // spilling the title lettering over both neighbours
+  const titleFits = titleWidth(text) + 6 <= ww;
+  if (font && titleFits) drawText(c, text, x, y + Math.round((hh - 8) / 2) + 1, fg, { align: 'center', shadow: null, font: 'title', flatTitle: true });
+  else drawText(c, text, x, y + Math.round((hh - 7) / 2), fg, { align: 'center', shadow: null });
 }
 
 function palm(c: Ctx, x: number, base: number, h: number, trunk = '#7a5230', leaf = '#2a7a3a', leaf2 = '#3a9a4a'): void {
@@ -153,99 +181,457 @@ const STYLE = {
   tampa: { wall: '#f0e0c0', trim: '#c07a3a', aw: ['#3a8ac0', '#f6f6f2'], signBg: '#f6e8b8', signFg: '#3a5a8a', win: '#9ad8f0' },
 } as const;
 
+/** Standing shopkeeper behind a counter or in a doorway. Flat 1:1 pixel blocks, no outline,
+ *  the same construction as the rest of the street art. */
+function keeper(c: Ctx, x: number, base: number, o: { skin?: string; shirt?: string; hair?: string; apron?: string; hat?: 'cap' | 'flat' | 'none'; mustache?: boolean } = {}): void {
+  const skin = o.skin ?? '#e8b088', shirt = o.shirt ?? '#4a6a9a', hair = o.hair ?? '#2a1a12';
+  c.globalAlpha = 0.25; R(c, x - 6, base - 1, 13, 1, '#0e0812'); c.globalAlpha = 1;
+  // legs + torso
+  R(c, x - 4, base - 9, 3, 8, '#2a2a34'); R(c, x + 2, base - 9, 3, 8, '#2a2a34');
+  R(c, x - 3, base - 10, 7, 2, '#1a1a22');
+  R(c, x - 6, base - 22, 12, 13, shirt);
+  R(c, x - 6, base - 22, 12, 1, '#ffffff28');
+  R(c, x - 6, base - 12, 12, 1, '#00000030');
+  if (o.apron) R(c, x - 4, base - 16, 8, 7, o.apron);
+  // arms + hands
+  R(c, x - 8, base - 21, 2, 8, shirt); R(c, x + 6, base - 21, 2, 8, shirt);
+  R(c, x - 8, base - 14, 2, 2, skin); R(c, x + 6, base - 14, 2, 2, skin);
+  // head
+  R(c, x - 4, base - 30, 9, 8, skin);
+  R(c, x - 4, base - 30, 9, 2, hair);
+  R(c, x - 5, base - 28, 1, 4, hair); R(c, x + 5, base - 28, 1, 4, hair);
+  P(c, x - 2, base - 25, '#1a1220'); P(c, x + 2, base - 25, '#1a1220');
+  if (o.mustache) R(c, x - 2, base - 23, 5, 1, hair);
+  if (o.hat === 'cap') { R(c, x - 5, base - 31, 11, 3, '#d02830'); R(c, x - 7, base - 28, 5, 1, '#a8202a'); }
+  else if (o.hat === 'flat') { R(c, x - 5, base - 31, 11, 3, '#5a4a3a'); R(c, x - 6, base - 28, 13, 1, '#3a2e22'); }
+}
+
+/** Small paper lantern, the kind strung along İstanbul and İzmir shopfronts. */
+function lantern(c: Ctx, x: number, y: number, body = '#e8b040', glow = '#fff0b0'): void {
+  R(c, x, y, 1, 6, '#3a2a1a');
+  R(c, x - 3, y + 6, 7, 2, body);
+  R(c, x - 4, y + 8, 9, 6, body);
+  R(c, x - 3, y + 9, 7, 2, glow);
+  R(c, x - 4, y + 14, 9, 1, '#a8701a');
+  P(c, x, y + 15, '#a8701a');
+}
+
+/** Produce crate: slatted wood with a heap of fruit or vegetables on top. */
+function produceCrate(c: Ctx, x: number, base: number, cols: string[], w = 16): void {
+  R(c, x, base - 8, w, 8, '#a8703a');
+  R(c, x, base - 8, w, 1, '#c8904a');
+  for (let i = 2; i < w - 1; i += 4) R(c, x + i, base - 8, 1, 8, '#7a4a22');
+  R(c, x, base - 3, w, 1, '#7a4a22');
+  for (let i = 1; i < w - 1; i += 3) for (let j = 0; j < 2; j++) P(c, x + i + j, base - 9 - (i % 2), cols[(i + j) % cols.length]);
+}
+
+/** Double-handled burlap sack with a mound of spice on top. */
+function spiceSack(c: Ctx, x: number, base: number, col: string): void {
+  R(c, x + 1, base - 10, 9, 10, '#b89a6a');
+  R(c, x + 1, base - 10, 9, 1, '#d0b482');
+  R(c, x + 3, base - 12, 5, 2, col);
+  R(c, x + 4, base - 13, 3, 1, col);
+  R(c, x, base - 9, 1, 4, '#8a6a3a'); R(c, x + 10, base - 9, 1, 4, '#8a6a3a');
+}
+
 function shopFront(c: Ctx, spot: ShopSpot, style: keyof typeof STYLE): void {
   const shop = SHOPS[spot.shop];
   const s = STYLE[style];
-  const x = spot.x, top = STREET_TOP - 62;
-  R(c, x - 44, top, 88, 62, s.wall);
-  R(c, x - 44, top, 88, 2, s.trim);
-  R(c, x - 44, top, 2, 62, s.trim); R(c, x + 42, top, 2, 62, s.trim);
-  // cornice + big sign
-  cornice(c, x - 46, top, 92, s.trim, '#f6e8b8');
-  signBoard(c, x, top + 6, shop.name, s.signBg, s.signFg, Math.min(84, shop.name.length * 11 + 12), true);
-  // lit windows with shelves of goods
-  for (const wx of [x - 38, x + 16]) {
-    R(c, wx - 1, STREET_TOP - 34, 24, 32, OUT);
-    R(c, wx, STREET_TOP - 33, 22, 30, s.win);
-    R(c, wx, STREET_TOP - 33, 22, 2, '#fff6d0');
-    for (let row = 0; row < 3; row++) {
-      R(c, wx + 1, STREET_TOP - 28 + row * 8, 20, 1, '#7a4a2a');
-      for (let i = 0; i < 6; i++) P(c, wx + 2 + i * 3, STREET_TOP - 30 + row * 8, ['#d0202c', '#2a6ad0', '#f0c818', '#5aa83a'][(i + row) % 4]);
-    }
-    R(c, wx + 2, STREET_TOP - 12, 2, 8, '#f0f0f0');
+  const x = spot.x, top = STREET_TOP - 64, W = 96;
+  const left = x - W / 2;
+  // wall, with the brick/stone coursing that suits the city
+  R(c, left, top, W, STREET_TOP - top, s.wall);
+  R(c, left, top, W, 2, s.trim);
+  R(c, left, top, 2, STREET_TOP - top, s.trim); R(c, left + W - 2, top, 2, STREET_TOP - top, s.trim);
+  if (style === 'ny') {
+    for (let yy = top + 4; yy < STREET_TOP - 20; yy += 4) for (let xx = left + 3; xx < left + W - 2; xx += 5) P(c, xx + ((yy / 4) % 2 ? 2 : 0), yy, '#4a241e');
+  } else {
+    for (let yy = top + 4; yy < STREET_TOP - 18; yy += 5) R(c, left + 1, yy, W - 2, 1, '#00000018');
+    for (let yy = top + 7; yy < STREET_TOP - 18; yy += 10) for (let xx = left + 6 + (yy % 20 ? 5 : 0); xx < left + W - 6; xx += 11) R(c, xx, yy, 6, 3, '#00000014');
   }
-  // door with warm light spilling out
-  R(c, x - 12, STREET_TOP - 34, 24, 34, OUT);
-  R(c, x - 11, STREET_TOP - 33, 22, 33, '#2a1a14');
-  R(c, x - 9, STREET_TOP - 30, 18, 30, '#f6c860');
-  R(c, x - 9, STREET_TOP - 30, 18, 8, '#ffe8a0');
-  R(c, x - 8, STREET_TOP - 22, 16, 8, '#d8902a');
-  for (let i = 0; i < 4; i++) P(c, x - 6 + i * 4, STREET_TOP - 20, i % 2 ? '#d0202c' : '#5aa83a');
-  R(c, x + 7, STREET_TOP - 18, 2, 2, '#f0c040');
-  // awning over the door
-  awning(c, x - 12, STREET_TOP - 40, 24, s.aw[0], s.aw[1]);
-  // pavement step
-  R(c, x - 14, STREET_TOP - 1, 28, 2, '#c8b8a8');
-  R(c, x - 14, STREET_TOP + 1, 28, 1, OUT);
+  cornice(c, left - 2, top, W + 4, s.trim, '#f6e8b8');
+
+  // signboard with the shop's own name in the chunky title font
+  signBoard(c, x, top + 4, shop.name, s.signBg, s.signFg, Math.min(W - 8, shop.name.length * 13 + 10), true);
+  if (shop.id === 'bodega') {
+    // the little window plate every bodega has: open all night
+    R(c, x + 18, STREET_TOP - 32, 26, 6, '#141018');
+    drawText(c, 'OPEN 24/7', x + 31, STREET_TOP - 31, '#f06a8a', { align: 'center', shadow: null });
+  }
+
+  // wide striped awning across the frontage, as on the reference sheet
+  awning(c, left + 4, STREET_TOP - 40, W - 8, s.aw[0], s.aw[1]);
+
+  // two lit display windows with shelves of goods
+  for (const wx of [left + 6, x + 14]) {
+    R(c, wx - 1, STREET_TOP - 34, 28, 33, OUT);
+    R(c, wx, STREET_TOP - 33, 26, 31, s.win);
+    R(c, wx, STREET_TOP - 33, 26, 2, '#fff6d0');
+    for (let row = 0; row < 3; row++) {
+      R(c, wx + 1, STREET_TOP - 27 + row * 8, 24, 1, '#7a4a2a');
+      for (let i = 0; i < 7; i++) {
+        const col = shop.id === 'bakkal' ? ['#e0b06a', '#c88a3a', '#8aa83a', '#f6e8c8'][(i + row) % 4]
+          : shop.id === 'pazar' ? ['#d8a020', '#c02a2a', '#8a6a2a', '#e0c070'][(i + row) % 4]
+            : ['#d0202c', '#2a6ad0', '#f0c818', '#5aa83a', '#f6f2ea'][(i + row) % 5];
+        P(c, wx + 2 + i * 3, STREET_TOP - 29 + row * 8, col);
+        P(c, wx + 2 + i * 3, STREET_TOP - 28 + row * 8, col);
+      }
+    }
+    // glass sheen and a hand-lettered note taped inside
+    R(c, wx + 2, STREET_TOP - 31, 2, 9, '#ffffff40');
+    R(c, wx + 16, STREET_TOP - 20, 7, 4, '#fffaf0'); P(c, wx + 18, STREET_TOP - 18, '#c02a2a');
+    R(c, wx + 1, STREET_TOP - 6, 24, 4, '#2a1a14');
+  }
+
+  // door with warm light spilling out and the keeper waiting inside
+  R(c, left + W / 2 - 12, STREET_TOP - 34, 24, 34, OUT);
+  R(c, left + W / 2 - 11, STREET_TOP - 33, 22, 33, '#2a1a14');
+  R(c, left + W / 2 - 9, STREET_TOP - 30, 18, 30, '#f6c860');
+  R(c, left + W / 2 - 9, STREET_TOP - 30, 18, 8, '#ffe8a0');
+  keeper(c, left + W / 2, STREET_TOP - 2, { shirt: shop.id === 'bodega' ? '#8a2a34' : '#4a6a9a', apron: shop.id === 'pazar' ? '#6a8a4a' : undefined, hat: shop.id === 'bodega' ? 'cap' : 'none', mustache: shop.id === 'pazar' });
+  c.globalAlpha = 0.55; R(c, left + W / 2 - 9, STREET_TOP - 30, 18, 9, '#f6c860'); c.globalAlpha = 1;
+  R(c, left + W / 2 + 7, STREET_TOP - 18, 2, 2, '#f0c040');
+
+  // per-shop street furniture, lifted from the reference sheet
+  switch (shop.id) {
+    case 'bodega': {
+      // fruit stand either side of the door and a stack of crates
+      produceCrate(c, left + 3, STREET_TOP - 1, ['#d0202c', '#e8a020', '#5aa83a']);
+      produceCrate(c, left + 3, STREET_TOP - 9, ['#8ac8ff', '#f0c818', '#d0202c'], 12);
+      R(c, left + W - 22, STREET_TOP - 1, 18, 6, '#a8703a');
+      R(c, left + W - 22, STREET_TOP - 1, 18, 1, '#c8904a');
+      R(c, left + W - 20, STREET_TOP - 6, 14, 5, '#8a5a2a');
+      break;
+    }
+    case 'bakkal': {
+      // bread boards under the awning, olive jars, and the flag on its pole
+      R(c, left + 3, STREET_TOP - 10, 18, 3, '#8a5a2a');
+      for (let i = 0; i < 4; i++) { disc(c, left + 6 + i * 4, STREET_TOP - 12, 2, '#d8a050'); P(c, left + 6 + i * 4, STREET_TOP - 13, '#f0c878'); }
+      for (const jx of [left + W - 20, left + W - 13]) { R(c, jx, STREET_TOP - 12, 6, 12, '#8a9aa8'); R(c, jx, STREET_TOP - 13, 6, 2, '#c8d8e0'); R(c, jx + 1, STREET_TOP - 9, 4, 6, '#4a6a3a'); }
+      R(c, left + W - 30, STREET_TOP - 56, 1, 22, '#e8e4d4'); flagTR(c, left + W - 29, STREET_TOP - 56);
+      break;
+    }
+    case 'pazar': {
+      // lanterns, spice sacks and a rolled carpet: bazaar, not a mini-mart
+      lantern(c, left + 6, STREET_TOP - 52); lantern(c, left + W - 8, STREET_TOP - 52);
+      spiceSack(c, left + 3, STREET_TOP - 1, '#d8901a'); spiceSack(c, left + 14, STREET_TOP - 1, '#a8301a');
+      spiceSack(c, left + W - 22, STREET_TOP - 1, '#c8a020'); spiceSack(c, left + W - 11, STREET_TOP - 1, '#7a8a2a');
+      R(c, left + W - 32, STREET_TOP - 22, 6, 21, '#8a2a3a'); R(c, left + W - 32, STREET_TOP - 22, 6, 2, '#c8604a');
+      R(c, left + W - 32, STREET_TOP - 14, 6, 2, '#e0b040'); R(c, left + W - 32, STREET_TOP - 8, 6, 2, '#e0b040');
+      break;
+    }
+    default: {
+      // tacos: service counter, surfboard and a chilli string
+      R(c, left + W - 15, STREET_TOP - 44, 5, 44, '#f6f2e6'); R(c, left + W - 17, STREET_TOP - 46, 9, 4, '#e05a4a');
+      R(c, left + W - 14, STREET_TOP - 30, 3, 3, '#e05a4a');
+      for (let i = 0; i < 6; i++) { P(c, left + W - 16, STREET_TOP - 40 + i * 6, '#d0202c'); P(c, left + W - 15, STREET_TOP - 38 + i * 6, '#5aa83a'); }
+      R(c, left + 3, STREET_TOP - 12, 14, 12, '#f0c040'); R(c, left + 4, STREET_TOP - 11, 12, 9, '#2a3a48');
+      for (let i = 0; i < 3; i++) P(c, left + 6 + i * 4, STREET_TOP - 8, '#f6e8c0');
+      break;
+    }
+  }
+
+  // pavement step and the warm pool of light it throws onto the walk
+  R(c, x - 22, STREET_TOP - 1, 44, 2, '#c8b8a8');
+  R(c, x - 22, STREET_TOP + 1, 44, 1, OUT);
+  c.globalAlpha = 0.12; R(c, x - 20, STREET_TOP + 2, 40, 5, '#ffe8a0'); c.globalAlpha = 1;
 }
 
 function vendorBooth(c: Ctx, spot: ShopSpot, style: keyof typeof STYLE): void {
   const shop = SHOPS[spot.shop];
   const x = spot.x;
-  if (style === 'ny') {
-    // hot-dog cart under a red umbrella
-    R(c, x - 20, STREET_TOP - 26, 40, 4, OUT);
-    R(c, x - 18, STREET_TOP - 24, 36, 14, '#d02830');
-    R(c, x - 18, STREET_TOP - 24, 36, 2, '#f06a60');
-    R(c, x - 16, STREET_TOP - 18, 32, 7, '#f6e8c8');
-    for (let i = 0; i < 4; i++) R(c, x - 14 + i * 8, STREET_TOP - 17, 5, 2, '#c8602a');
-    R(c, x - 11, STREET_TOP - 10, 4, 6, '#2a2a30'); R(c, x + 7, STREET_TOP - 10, 4, 6, '#2a2a30');
-    R(c, x - 2, STREET_TOP - 44, 2, 20, '#5a5a60');
-    for (let i = -14; i <= 14; i += 4) R(c, x + i, STREET_TOP - 46, 4, 6, i % 8 ? '#d02830' : '#f6e8c8');
-    R(c, x - 16, STREET_TOP - 47, 32, 2, OUT);
-    R(c, x + 10, STREET_TOP - 34, 2, 3, '#f0c040');
-  } else if (style === 'izmir') {
-    // simit cart with a glass case
-    R(c, x - 22, STREET_TOP - 18, 44, 3, OUT);
-    R(c, x - 20, STREET_TOP - 16, 40, 10, '#7a4a22');
-    R(c, x - 20, STREET_TOP - 16, 40, 2, '#b8824a');
-    R(c, x - 18, STREET_TOP - 32, 36, 16, '#b8d8e8');
-    R(c, x - 17, STREET_TOP - 31, 34, 14, '#e8f6ff');
-    for (let i = 0; i < 5; i++) { disc(c, x - 13 + i * 6, STREET_TOP - 24, 2, '#c88a3a'); P(c, x - 13 + i * 6, STREET_TOP - 24, '#f6d87a'); }
-    R(c, x - 18, STREET_TOP - 33, 36, 2, OUT);
-    R(c, x - 12, STREET_TOP - 6, 3, 4, '#2a2222'); R(c, x + 9, STREET_TOP - 6, 3, 4, '#2a2222');
-    R(c, x - 24, STREET_TOP - 26, 6, 3, '#c82430'); // stacked simits on the side
-    signBoard(c, x, STREET_TOP - 42, shop.name, '#f6ead0', '#8a2a1a', 34);
-  } else if (style === 'istanbul') {
-    // tea stand: red canopy, samovar, stacked glasses
-    R(c, x - 18, STREET_TOP - 34, 36, 3, OUT);
-    R(c, x - 16, STREET_TOP - 31, 32, 20, '#7a2a22');
-    R(c, x - 16, STREET_TOP - 31, 32, 3, '#c84830');
-    R(c, x - 16, STREET_TOP - 12, 32, 3, '#5a1a12');
-    R(c, x - 14, STREET_TOP - 28, 12, 12, '#d8a030');
-    R(c, x - 12, STREET_TOP - 30, 8, 3, '#f0c860');
-    R(c, x - 2, STREET_TOP - 26, 2, 9, '#2a2a2a');
-    for (let i = 0; i < 3; i++) { R(c, x + 4 + i * 3, STREET_TOP - 24, 2, 3, '#e8e8e0'); P(c, x + 4 + i * 3, STREET_TOP - 23, '#b05a20'); }
-    for (let i = -16; i <= 16; i += 4) R(c, x + i, STREET_TOP - 38, 3, 4, i % 8 ? '#c82430' : '#f6e8c8');
-    R(c, x - 18, STREET_TOP - 39, 36, 2, OUT);
-    signBoard(c, x, STREET_TOP - 48, shop.name, '#2a2018', '#e8c040', 40);
+  // the stall signs carry the reference sheet's one-word labels, not the full menu name
+  const label = ({ hotdog: 'HOT DOG', simit: 'SİMİT', cay: 'ÇAY', tacotruck: 'TACOS' } as Record<string, string>)[shop.id] ?? shop.name;
+  if (shop.id === 'hotdog') {
+    // red umbrella, steam trays and a vendor in a cap
+    keeper(c, x + 26, STREET_TOP - 1, { shirt: '#f6f2ea', apron: '#c82430', hat: 'cap', mustache: true });
+    R(c, x - 24, STREET_TOP - 24, 48, 3, OUT);
+    R(c, x - 22, STREET_TOP - 21, 44, 13, '#d02830');
+    R(c, x - 22, STREET_TOP - 21, 44, 2, '#f06a60');
+    R(c, x - 20, STREET_TOP - 15, 40, 6, '#c02028');
+    R(c, x - 17, STREET_TOP - 12, 34, 4, '#f6e8c8');
+    for (let i = 0; i < 4; i++) R(c, x - 15 + i * 8, STREET_TOP - 11, 5, 2, '#b8501a');
+    for (let i = 0; i < 3; i++) { R(c, x - 12 + i * 3, STREET_TOP - 20, 2, 3, ['#f0c818', '#d0202c', '#5aa83a'][i]); }
+    R(c, x - 14, STREET_TOP - 6, 4, 6, '#2a2a30'); R(c, x + 10, STREET_TOP - 6, 4, 6, '#2a2a30');
+    R(c, x - 8, STREET_TOP - 34, 2, 11, '#5a5a60');
+    for (let i = -20; i <= 20; i += 4) R(c, x + i, STREET_TOP - 36, 4, 5, i % 8 ? '#d02830' : '#f6e8c8');
+    R(c, x - 22, STREET_TOP - 37, 48, 2, OUT);
+    for (let i = 0; i < 2; i++) { const sx2 = x + 4 + i * 4; c.globalAlpha = 0.4; disc(c, sx2, STREET_TOP - 40 - i * 3, 2 + i, '#ffffff'); c.globalAlpha = 1; }
+  } else if (shop.id === 'simit') {
+    // glass case of simit, stacked rings on the side, vendor in a flat cap
+    keeper(c, x + 26, STREET_TOP - 1, { shirt: '#8a7a6a', apron: '#f6f2ea', hat: 'flat', mustache: true });
+    R(c, x - 24, STREET_TOP - 18, 48, 3, OUT);
+    R(c, x - 22, STREET_TOP - 16, 44, 11, '#7a4a22');
+    R(c, x - 22, STREET_TOP - 16, 44, 2, '#b8824a');
+    R(c, x - 20, STREET_TOP - 33, 40, 17, '#b8d8e8');
+    R(c, x - 19, STREET_TOP - 32, 38, 15, '#e8f6ff');
+    R(c, x - 19, STREET_TOP - 32, 38, 1, '#ffffff');
+    for (let i = 0; i < 6; i++) { disc(c, x - 15 + i * 6, STREET_TOP - 25, 2, '#c88a3a'); P(c, x - 15 + i * 6, STREET_TOP - 25, '#f6d87a'); }
+    R(c, x - 24, STREET_TOP - 8, 6, 8, '#8a5a2a');
+    for (let i = 0; i < 3; i++) { disc(c, x - 21, STREET_TOP - 11 - i * 2, 2, '#c88a3a'); }
+    R(c, x - 16, STREET_TOP - 6, 3, 6, '#2a2222'); R(c, x + 12, STREET_TOP - 6, 3, 6, '#2a2222');
+    signBoard(c, x - 4, STREET_TOP - 47, label, '#f6ead0', '#8a2a1a', 40, true);
+  } else if (shop.id === 'cay') {
+    // tea stand: samovar, tulip glasses, dried chillies, vendor with a moustache
+    keeper(c, x + 2, STREET_TOP - 20, { shirt: '#f6f2ea', apron: '#c82430', mustache: true, hat: 'none' });
+    R(c, x - 24, STREET_TOP - 34, 48, 3, OUT);
+    R(c, x - 22, STREET_TOP - 31, 44, 20, '#7a2a22');
+    R(c, x - 22, STREET_TOP - 31, 44, 3, '#c84830');
+    R(c, x - 22, STREET_TOP - 12, 44, 3, '#5a1a12');
+    R(c, x - 20, STREET_TOP - 28, 14, 13, '#d8a030');
+    R(c, x - 18, STREET_TOP - 31, 10, 3, '#f0c860');
+    R(c, x - 15, STREET_TOP - 15, 2, 4, '#6a4a1a');
+    for (let i = 0; i < 3; i++) { R(c, x + 8 + i * 4, STREET_TOP - 25, 2, 4, '#e8e8e0'); P(c, x + 8 + i * 4, STREET_TOP - 23, '#b05a20'); }
+    for (let i = 0; i < 4; i++) { P(c, x - 3 + i * 4, STREET_TOP - 22, '#a8301a'); }
+    R(c, x - 2, STREET_TOP - 30, 2, 14, '#2a2a2a');
+    R(c, x - 4, STREET_TOP - 16, 10, 2, '#f0c040');
+    for (let i = -22; i <= 22; i += 4) R(c, x + i, STREET_TOP - 38, 3, 5, i % 8 ? '#c82430' : '#f6e8c8');
+    R(c, x - 24, STREET_TOP - 39, 48, 2, OUT);
+    signBoard(c, x, STREET_TOP - 62, label, '#2a2018', '#e8c040', 44, true);
+    R(c, x - 14, STREET_TOP - 50, 2, 12, '#3a2a1a'); R(c, x + 12, STREET_TOP - 50, 2, 12, '#3a2a1a');
   } else {
-    // taco truck
-    R(c, x - 36, STREET_TOP - 34, 72, 26, OUT);
-    R(c, x - 34, STREET_TOP - 33, 68, 24, '#f0c040');
-    R(c, x - 34, STREET_TOP - 33, 68, 8, '#e8a820');
-    R(c, x - 34, STREET_TOP - 20, 68, 2, '#c88010');
-    R(c, x - 26, STREET_TOP - 28, 34, 12, '#2a3a4a');
-    R(c, x - 25, STREET_TOP - 27, 32, 10, '#9ad0e8');
-    R(c, x - 22, STREET_TOP - 24, 10, 5, '#f6e8c0'); // menu board
-    R(c, x + 14, STREET_TOP - 28, 14, 14, '#2a3a4a');
-    R(c, x + 15, STREET_TOP - 27, 12, 12, '#f6e8c0');
-    R(c, x - 30, STREET_TOP - 10, 10, 10, '#1a1a1a'); R(c, x + 18, STREET_TOP - 10, 10, 10, '#1a1a1a');
-    R(c, x - 28, STREET_TOP - 8, 6, 6, '#8a8a90'); R(c, x + 20, STREET_TOP - 8, 6, 6, '#8a8a90');
-    signBoard(c, x - 4, STREET_TOP - 42, shop.name, '#f6e8b8', '#3a5a8a', 56);
-    R(c, x - 38, STREET_TOP - 4, 76, 3, '#8a7a6a');
+    // taco truck with the hatch open and the cook leaning out
+    R(c, x - 38, STREET_TOP - 36, 76, 28, OUT);
+    R(c, x - 36, STREET_TOP - 35, 72, 26, '#f0c040');
+    R(c, x - 36, STREET_TOP - 35, 72, 8, '#e8a820');
+    R(c, x - 36, STREET_TOP - 21, 72, 2, '#c88010');
+    R(c, x - 28, STREET_TOP - 30, 38, 15, '#2a3a4a');
+    R(c, x - 27, STREET_TOP - 29, 36, 13, '#f6e8c0');
+    // the cook, just head and shoulders showing through the hatch
+    R(c, x - 6, STREET_TOP - 25, 13, 5, '#3a8a4a');
+    R(c, x - 4, STREET_TOP - 28, 7, 7, '#e8b088');
+    R(c, x - 5, STREET_TOP - 29, 9, 2, '#2a1a12');
+    R(c, x - 6, STREET_TOP - 32, 11, 3, '#d02830'); R(c, x - 8, STREET_TOP - 29, 4, 1, '#a8202a');
+    P(c, x - 2, STREET_TOP - 26, '#1a1220'); P(c, x + 2, STREET_TOP - 26, '#1a1220');
+    R(c, x - 2, STREET_TOP - 24, 5, 1, '#2a1a12');
+    for (let i = 0; i < 4; i++) P(c, x - 24 + i * 8, STREET_TOP - 26, '#c02a2a');
+    R(c, x - 24, STREET_TOP - 20, 30, 2, '#8a6a3a');
+    R(c, x + 14, STREET_TOP - 30, 16, 16, '#2a3a4a');
+    R(c, x + 15, STREET_TOP - 29, 14, 14, '#f6e8c0');
+    for (let i = 0; i < 3; i++) R(c, x + 17, STREET_TOP - 26 + i * 4, 10, 1, '#8a6a3a');
+    R(c, x - 32, STREET_TOP - 10, 11, 10, '#1a1a1a'); R(c, x + 18, STREET_TOP - 10, 11, 10, '#1a1a1a');
+    R(c, x - 30, STREET_TOP - 8, 7, 6, '#8a8a90'); R(c, x + 20, STREET_TOP - 8, 7, 6, '#8a8a90');
+    R(c, x - 24, STREET_TOP - 37, 2, 3, '#f0c040');
+    for (let i = -30; i <= 26; i += 6) P(c, x + i, STREET_TOP - 38 - (i % 12 === 0 ? 1 : 0), '#f6e8c0');
+    signBoard(c, x - 2, STREET_TOP - 44, label, '#f6e8b8', '#3a5a8a', 58, true);
+    R(c, x - 40, STREET_TOP - 4, 80, 3, '#8a7a6a');
   }
-  if (style !== 'ny') R(c, x - 22, STREET_TOP - 2, 44, 2, '#c8b8a8');
+  if (style !== 'ny') R(c, x - 24, STREET_TOP - 2, 48, 2, '#c8b8a8');
+}
+
+/** A shop standing on an imported stage strip: the strip already drew the street, so the shop
+ *  is a free-standing booth rather than a facade cut into the wall. Striped awning, a counter
+ *  with the goods on it, crates at the ends and the keeper behind — the bazaar booth the
+ *  reference sheet is full of, which reads as a shop without fighting the painted skyline. */
+function marketStall(c: Ctx, spot: ShopSpot, style: ShopStyle): void {
+  const shop = SHOPS[spot.shop];
+  const s = STYLE[style];
+  const x = Math.round(spot.x), base = STREET_TOP - 1;
+  const W = 60, left = x - W / 2;
+  const label = ({ hotdog: 'HOT DOG', simit: 'SİMİT', cay: 'ÇAY', tacotruck: 'TACOS', bodega: 'BODEGA', bakkal: 'BAKKAL', pazar: 'PAZAR', tacos: 'TACOS', newsstand: 'NEWS' } as Record<string, string>)[shop.id] ?? shop.name;
+  const goods = shop.id === 'bodega' || shop.id === 'newsstand' ? ['#d0202c', '#e8a020', '#5aa83a']
+    : shop.id === 'bakkal' ? ['#e0b06a', '#c88a3a', '#8aa83a']
+      : shop.id === 'pazar' ? ['#d8a020', '#c02a2a', '#8a6a2a', '#e0c070']
+        : ['#f0c040', '#c02a2a', '#3a9a4a'];
+
+  // shadow under the stall, so it sits on the pavement instead of floating
+  c.globalAlpha = 0.3; R(c, left + 2, base, W - 4, 2, '#0e0812'); c.globalAlpha = 1;
+
+  // the keeper behind the counter, head and shoulders over the boards
+  keeper(c, x + 10, base - 8, {
+    shirt: shop.id === 'bodega' ? '#8a2a34' : style === 'ny' ? '#4a6a9a' : '#c8a06a',
+    apron: style === 'ny' ? '#f6f2ea' : '#6a8a4a',
+    hat: style === 'ny' ? 'cap' : 'flat',
+    mustache: style !== 'ny',
+  });
+
+  // back boards: dark interior with shelves of stock, kept low so the skyline stays visible
+  R(c, left + 3, base - 30, W - 6, 20, '#3a2a1c');
+  for (let row = 0; row < 2; row++) {
+    R(c, left + 5, base - 24 + row * 8, W - 10, 1, '#6a4a2a');
+    for (let i = 0; i < 9; i++) {
+      P(c, left + 7 + i * 5, base - 26 + row * 8, goods[(i + row) % goods.length]);
+      P(c, left + 7 + i * 5, base - 25 + row * 8, goods[(i + row + 1) % goods.length]);
+    }
+  }
+
+  // striped awning over the booth, scalloped at the front edge
+  awning(c, left, base - 38, W, s.aw[0], s.aw[1]);
+  // posts down to the pavement
+  R(c, left + 1, base - 32, 2, 32, '#4a3220'); R(c, left + W - 3, base - 32, 2, 32, '#4a3220');
+
+  // counter: boards with the day's produce heaped on them and a paper price tag
+  R(c, left + 1, base - 15, W - 2, 2, '#c8a878');
+  R(c, left + 1, base - 13, W - 2, 13, '#8a5a32');
+  for (let i = 2; i < W - 2; i += 5) R(c, left + i, base - 13, 1, 13, '#6a4222');
+  R(c, left + 1, base - 3, W - 2, 2, '#5a3a1c');
+  produceCrate(c, left + 3, base - 15, goods, 14);
+  produceCrate(c, left + W - 19, base - 15, goods.slice().reverse(), 14);
+  R(c, x + 2, base - 27, 8, 5, '#f6f2e6'); P(c, x + 4, base - 25, '#c02a2a');
+
+  // crates and a sack stacked at the ends, and the shop's own sign above the awning
+  produceCrate(c, left - 13, base, goods, 13);
+  spiceSack(c, left + W + 2, base, goods[0]);
+  signBoard(c, x, base - 53, label, s.signBg, s.signFg, Math.min(62, label.length * 7 + 10), true);
+
+  // the warm pool of light the awning throws on the walk
+  c.globalAlpha = 0.12; R(c, left + 2, base + 2, W - 4, 5, '#ffe8a0'); c.globalAlpha = 1;
+}
+
+/** Draw whatever shop art a stage owes a spot: the shop's own cart or stall for a vendor, a
+ *  market booth for a storefront. World coordinates, so callers offset by the camera. */
+export function drawShopBooth(c: Ctx, spot: ShopSpot, style: ShopStyle): void {
+  if (SHOPS[spot.shop].venue === 'vendor') vendorBooth(c, spot, style);
+  else marketStall(c, spot, style);
+}
+
+/** Which city's shop dressing a background theme wants. */
+export function shopStyleFor(theme: string): ShopStyle {
+  if (theme.startsWith('ny')) return 'ny';
+  if (theme.startsWith('izm')) return 'izmir';
+  if (theme.startsWith('ist')) return 'istanbul';
+  return 'tampa';
+}
+
+// ---------------------------------------------------------------- street furniture
+// The concepts put a lived-in band of clutter along the walk: hydrants, paper boxes, stacked
+// produce, café chairs, coolers and bollards. It sits between the facades and the fighters, and
+// it keeps clear of every shop door so an entrance always stays walkable.
+
+/** Subway stair down to the platform: green ironwork, two globe lamps, the name plate and the
+ *  warm haze that rises out of the stairwell. The signature piece of every NYC street. */
+function subwayEntrance(c: Ctx, x: number): void {
+  R(c, x - 3, STREET_TOP - 34, 58, 34, '#16201c');
+  R(c, x, STREET_TOP - 31, 52, 31, '#20342a');
+  R(c, x + 6, STREET_TOP - 27, 40, 23, '#0a100e');
+  for (let i = 0; i < 40; i += 4) R(c, x + 6 + i, STREET_TOP - 27, 2, 23, '#16241c');
+  R(c, x - 3, STREET_TOP - 36, 58, 3, '#4a7a4a');
+  R(c, x - 3, STREET_TOP - 36, 58, 1, '#6aa86a');
+  for (const gx of [x + 2, x + 47]) {
+    R(c, gx, STREET_TOP - 46, 1, 10, '#2a3a2a');
+    c.globalAlpha = 0.22; disc(c, gx, STREET_TOP - 48, 6, '#5ae87a'); c.globalAlpha = 1;
+    disc(c, gx, STREET_TOP - 48, 3, '#5ae87a'); P(c, gx - 1, STREET_TOP - 49, '#d8ffe0');
+  }
+  signBoard(c, x + 26, STREET_TOP - 56, 'SUBWAY', '#f6e8b8', '#1a1a1a', 48);
+  // steam leaking out of the grating on the stair
+  c.globalAlpha = 0.16;
+  for (let i = 0; i < 5; i++) disc(c, x + 20 + Math.sin(i * 1.4) * 6, STREET_TOP - 32 - i * 6, 4 + i, '#c8d8e8');
+  c.globalAlpha = 1;
+}
+
+function hydrant(c: Ctx, x: number, b: number): void {
+  R(c, x - 1, b - 2, 7, 2, '#8a2a20');
+  R(c, x, b - 9, 5, 7, '#c8382c');
+  R(c, x, b - 9, 2, 7, '#e0503c');
+  R(c, x - 1, b - 10, 7, 2, '#e0503c');
+  R(c, x + 1, b - 12, 3, 2, '#f0d8c0');
+  R(c, x - 3, b - 7, 3, 2, '#a82a20'); R(c, x + 5, b - 7, 3, 2, '#a82a20');
+  P(c, x + 2, b - 6, '#f08a7a');
+}
+
+function newsBox(c: Ctx, x: number, b: number, col: string): void {
+  R(c, x, b - 13, 11, 13, col);
+  R(c, x, b - 13, 11, 1, '#f0ece0');
+  R(c, x + 2, b - 11, 7, 5, '#2a2634');
+  R(c, x + 2, b - 5, 7, 3, '#e8e4d8');
+  R(c, x, b - 1, 11, 1, '#1a1620');
+  P(c, x + 8, b - 7, '#f0c040');
+}
+
+function wireBasket(c: Ctx, x: number, b: number): void {
+  R(c, x, b - 12, 9, 12, '#33333d');
+  for (let y = b - 11; y < b - 1; y += 2) R(c, x + 1, y, 7, 1, '#5a5a66');
+  R(c, x, b - 13, 9, 2, '#22222a');
+  R(c, x + 1, b - 11, 7, 2, '#11111a');
+  R(c, x + 2, b - 8, 4, 2, '#8a8a94');
+}
+
+function sandwichBoard(c: Ctx, x: number, b: number): void {
+  R(c, x, b - 16, 2, 16, '#5a3a1c'); R(c, x + 9, b - 16, 2, 16, '#5a3a1c');
+  R(c, x + 1, b - 15, 9, 11, '#efe6c8');
+  R(c, x + 1, b - 15, 9, 1, '#fffaf0');
+  R(c, x + 2, b - 13, 7, 1, '#8a2a1a'); R(c, x + 2, b - 11, 5, 1, '#3a5a8a'); R(c, x + 2, b - 9, 6, 1, '#3a3a3a');
+  R(c, x, b - 5, 11, 1, '#5a3a1c');
+}
+
+function bollard(c: Ctx, x: number, b: number): void {
+  R(c, x, b - 10, 3, 10, '#2a2a34');
+  R(c, x - 1, b - 11, 5, 2, '#4a4a56');
+  P(c, x, b - 10, '#6a6a78');
+}
+
+function plantPot(c: Ctx, x: number, b: number): void {
+  R(c, x, b - 8, 12, 8, '#a8603a'); R(c, x, b - 8, 12, 2, '#c87850');
+  R(c, x + 1, b - 6, 10, 1, '#8a4a2a');
+  disc(c, x + 6, b - 12, 6, '#2e6a32'); disc(c, x + 3, b - 10, 4, '#3a7a3a'); disc(c, x + 9, b - 10, 4, '#46843e');
+  P(c, x + 5, b - 17, '#e8d040'); P(c, x + 8, b - 15, '#f06a8a');
+}
+
+function crateStack(c: Ctx, x: number, b: number, rng: Rng): void {
+  const cols = [['#d0202c', '#e8a020', '#5aa83a'], ['#d8a020', '#8a3a9a', '#c02a2a'], ['#8ac8ff', '#f0c818', '#d0202c']];
+  const n = rng.int(2, 3);
+  for (let i = 0; i < n; i++) produceCrate(c, x + (i % 2) * 12, b - i * 8, cols[i % 3], 13);
+  R(c, x + 1, b - 1, 25, 1, '#6a4a2a');
+}
+
+function cafeSet(c: Ctx, x: number, b: number): void {
+  // small round table with a tea glass and two stools, like the ones on the quay
+  R(c, x, b - 3, 18, 3, '#c8a878'); R(c, x, b - 3, 18, 1, '#e8d0ac');
+  R(c, x + 8, b, 2, 5, '#7a5a38');
+  R(c, x + 3, b - 7, 3, 4, '#f4f0e4'); P(c, x + 4, b - 6, '#b05a20');
+  R(c, x - 7, b - 8, 5, 2, '#8a5a32'); R(c, x - 6, b - 6, 1, 6, '#5a3a1c'); R(c, x - 4, b - 6, 1, 6, '#5a3a1c');
+  R(c, x + 21, b - 8, 5, 2, '#8a5a32'); R(c, x + 22, b - 6, 1, 6, '#5a3a1c'); R(c, x + 24, b - 6, 1, 6, '#5a3a1c');
+}
+
+function coolerBox(c: Ctx, x: number, b: number): void {
+  R(c, x, b - 9, 14, 9, '#e8ece8');
+  R(c, x, b - 9, 14, 2, '#3a8ac0');
+  R(c, x + 1, b - 6, 12, 1, '#b8c0c0');
+  R(c, x + 5, b - 12, 4, 3, '#c8c8c8');
+  R(c, x, b - 1, 14, 1, '#8a908c');
+}
+
+function surfRack(c: Ctx, x: number, b: number, rng: Rng): void {
+  R(c, x, b - 26, 2, 26, '#8a6a4a');
+  for (let i = 0; i < 2; i++) {
+    const bx = x + 2 + i * 5, col = rng.pick(['#e05a4a', '#3a8ac0', '#f0c850']);
+    R(c, bx, b - 24, 4, 20, col); R(c, bx - 1, b - 24, 6, 3, '#f6f2e6');
+    P(c, bx + 1, b - 14, '#f6f2e6');
+  }
+  R(c, x - 1, b - 2, 12, 2, '#a8703a');
+}
+
+type Furniture = 'ny' | 'izmir' | 'istanbul' | 'tampa';
+
+/** Scatter the chapter's pavement clutter along the near layer. */
+function streetFurniture(c: Ctx, w: number, rng: Rng, sec: SectionDef, kind: Furniture): void {
+  const doors = sec.shops.map((s) => s.x);
+  for (let x = 40; x < w - 46; x += rng.int(74, 132)) {
+    if (doors.some((d) => Math.abs(d - x) < 82)) continue;
+    const b = STREET_TOP - 1, r = rng.int(0, 99);
+    if (kind === 'ny') {
+      if (r < 26) hydrant(c, x, b);
+      else if (r < 48) newsBox(c, x, b, rng.pick(['#2a4a8a', '#8a2a2a', '#2a6a4a']));
+      else if (r < 68) wireBasket(c, x, b);
+      else if (r < 86) sandwichBoard(c, x, b);
+      else bollard(c, x, b);
+    } else if (kind === 'izmir') {
+      if (r < 34) cafeSet(c, x, b);
+      else if (r < 60) plantPot(c, x, b);
+      else if (r < 82) crateStack(c, x, b, rng);
+      else bollard(c, x, b);
+    } else if (kind === 'istanbul') {
+      if (r < 38) crateStack(c, x, b, rng);
+      else if (r < 62) plantPot(c, x, b);
+      else if (r < 84) cafeSet(c, x, b);
+      else bollard(c, x, b);
+    } else {
+      if (r < 30) coolerBox(c, x, b);
+      else if (r < 58) surfRack(c, x, b, rng);
+      else if (r < 78) plantPot(c, x, b);
+      else crateStack(c, x, b, rng);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- atmosphere
@@ -506,7 +892,7 @@ const THEMES: Record<string, Theme> = {
         for (let i = 0; i < 24; i += 2) P(c, x + bw - 22 + (i % 16), STREET_TOP - 26 + i, '#4a3a32');
         // awning + neon
         if (rng.chance(0.7)) awning(c, x + 4, STREET_TOP - 34, bw - 30, rng.pick(['#8a2228', '#24503a', '#2a2a5e']), '#e8dcc8');
-        const words = ['PIZZA', 'DELI', 'BAR', 'PAWN', 'LAUNDRY', '99¢', 'NAILS', 'BODEGA'];
+        const words = ['PIZZA', 'DELI', 'BAR', 'PAWN', 'LAUNDRY', '99¢', 'NAILS', 'LIQUOR'];
         const fg = rng.pick(['#f0d838', '#f06a8a', '#5ae8c0', '#8ac8ff']);
         neon(c, x + bw / 2, top + 6, rng.pick(words), fg, '#141018', Math.max(24, Math.min(bw - 10, 78)));
         // standpipe + trash bags against the wall
@@ -518,18 +904,7 @@ const THEMES: Record<string, Theme> = {
         if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'ny'); else vendorBooth(c, s, 'ny');
       }
       // subway entrance with green globes and steam
-      const sx = Math.min(w - 72, 236);
-      R(c, sx - 3, STREET_TOP - 34, 58, 34, '#16201c');
-      R(c, sx, STREET_TOP - 31, 52, 31, '#20342a');
-      R(c, sx + 6, STREET_TOP - 27, 40, 23, '#0a100e');
-      for (let i = 0; i < 40; i += 4) R(c, sx + 6 + i, STREET_TOP - 27, 2, 23, '#16241c');
-      R(c, sx - 3, STREET_TOP - 36, 58, 3, '#4a7a4a');
-      for (const gx of [sx + 2, sx + 47]) {
-        R(c, gx, STREET_TOP - 46, 1, 10, '#2a3a2a');
-        c.globalAlpha = 0.22; disc(c, gx, STREET_TOP - 48, 6, '#5ae87a'); c.globalAlpha = 1;
-        disc(c, gx, STREET_TOP - 48, 3, '#5ae87a'); P(c, gx - 1, STREET_TOP - 49, '#d8ffe0');
-      }
-      signBoard(c, sx + 26, STREET_TOP - 56, 'SUBWAY', '#f6e8b8', '#1a1a1a', 48);
+      subwayEntrance(c, Math.min(w - 72, 236));
       // overhead wires + string of bare bulbs
       for (let bx = 0; bx < w; bx += 140) {
         for (let x2 = 0; x2 < 140; x2++) { const y = 46 + Math.round(6 * Math.sin(x2 / 22)); P(c, bx + x2, y, '#241c24'); }
@@ -592,6 +967,8 @@ const THEMES: Record<string, Theme> = {
       for (const s of sec.shops) {
         if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'ny'); else vendorBooth(c, s, 'ny');
       }
+      // the block's own subway stair, so this street carries the same landmark as Flatbush
+      for (let sx2 = 210; sx2 < w - 80; sx2 += 660) subwayEntrance(c, sx2);
       // steam vent
       R(c, 0, STREET_TOP - 1, 0, 0, OUT);
       const vx = Math.min(w - 40, 860);
@@ -643,6 +1020,7 @@ const THEMES: Record<string, Theme> = {
       ridge(c, w, 96, 18, 96, '#6a4a7e', '#8a5f92');
       ridge(c, w, 104, 12, 58, '#54396a', '#6f4b7c');
       clouds(c, w, rng, 18, 52, '#6a3a74', '#a8607e', '#4a2a5e');
+      streakClouds(c, w, rng, 26, 82, '#a8557e', '#d88a7a');
       clouds(c, w, rng, 54, 76, '#8a4272', '#c86a76', '#5e3266');
       // the bay: sunset water with a shimmering path down the middle
       sea(c, w, 104, 142, ['#b87e8a', '#c47a7e', '#cc7a76', '#d8846a', '#e29460', '#eea45c'], 250, '#ffe6a8', rng);
@@ -651,6 +1029,10 @@ const THEMES: Record<string, Theme> = {
         R(c, fx, 118, 46, 7, '#f2f2ec'); R(c, fx + 5, 111, 20, 8, '#fbfbf6');
         R(c, fx + 7, 113, 5, 4, '#3a5a8a'); R(c, fx + 15, 113, 5, 4, '#3a5a8a');
         R(c, fx + 2, 119, 42, 2, '#3a5a8a');
+        // the stern flag every Kordon ferry flies
+        R(c, fx + 27, 104, 1, 7, '#e8e4d4');
+        R(c, fx + 28, 105, 7, 4, '#d0202c');
+        R(c, fx + 31, 106, 2, 2, '#f6f6f2'); P(c, fx + 32, 106, '#d0202c');
         R(c, fx - 6, 126, 58, 1, '#f6d8a0');
         for (let i = 0; i < 4; i++) P(c, fx + 10 + i * 8, 116, '#fff2c8');
         for (let i = 0; i < 12; i++) R(c, fx - 10 - i * 3, 127 + (i % 3), 2, 1, '#ffd9a0');
@@ -854,6 +1236,9 @@ const THEMES: Record<string, Theme> = {
   ist_market: {
     sky: ['#3a8ad8', '#5aa0e0', '#7ab8ea', '#9ad0f4', '#bce0fa'],
     far: (c, w, rng) => {
+      // warm morning haze over the Bosphorus, with the thin cloud bars the concept strip uses
+      c.globalAlpha = 0.18; R(c, 0, 58, w, 34, '#f6d8a0'); c.globalAlpha = 1;
+      streakClouds(c, w, rng, 20, 60, '#c8dcf0', '#f6fbff');
       R(c, 0, 96, w, 40, '#3a6aa0');
       for (let i = 0; i < w / 2; i++) R(c, rng.int(0, w), rng.int(98, 132), rng.int(2, 7), 1, '#5a8ac0');
       // Bosphorus bridge + ferry
@@ -867,11 +1252,16 @@ const THEMES: Record<string, Theme> = {
     },
     mid: (c, w, rng) => {
       R(c, 0, 116, w, 20, '#c8b8a0');
+      // mosque domes and pencil minarets, tall enough to read over the market roofs
       for (let x = 40; x < w; x += 150) {
-        // domes + minarets
-        R(c, x, 78, 54, 38, '#d8c8b8'); disc(c, x + 27, 78, 20, '#c8b8a8', true);
-        for (const mx of [x - 14, x + 62]) { R(c, mx, 58, 4, 58, '#d8c8b8'); disc(c, mx + 2, 58, 4, '#b8a898', true); R(c, mx + 2, 50, 1, 8, '#b8a898'); }
-        windows(c, x + 6, 86, 42, 24, rng, '#5a6a8a', '#4a5a7a', 3, 4, 4, 4, 0.4);
+        R(c, x, 64, 54, 52, '#d8c8b8'); disc(c, x + 27, 64, 20, '#c8b8a8', true);
+        for (let dx = -18; dx <= 18; dx += 2) P(c, x + 27 + dx, 64 - Math.round(Math.sqrt(Math.max(0, 400 - dx * dx))) + 1, '#8a7a68');
+        for (const mx of [x - 14, x + 62]) {
+          R(c, mx, 44, 4, 72, '#d8c8b8'); disc(c, mx + 2, 44, 4, '#b8a898', true);
+          R(c, mx + 1, 36, 2, 8, '#b8a898'); P(c, mx + 1, 34, '#e8d0a8');
+        }
+        for (let i = 0; i < 3; i++) { R(c, x + 14 + i * 12, 70, 5, 10, '#8a7a68'); disc(c, x + 16 + i * 12, 70, 3, '#8a7a68', true); }
+        windows(c, x + 6, 84, 42, 26, rng, '#5a6a8a', '#4a5a7a', 3, 4, 4, 4, 0.4);
       }
       // Galata tower
       for (let x = 300; x < w; x += 460) {
@@ -884,7 +1274,11 @@ const THEMES: Record<string, Theme> = {
       for (let i = 0; i < 5; i++) gull(c, rng.int(20, w - 20), rng.int(20, 56));
     },
     near: (c, w, rng, sec) => {
-      R(c, 0, 46, w, STREET_TOP - 46, '#1e1a16');
+      // shadowed back wall of the market: starts at the tallest roofline, so no dark bar floats
+      // above the buildings against the bright sky
+      R(c, 0, 54, w, STREET_TOP - 54, '#7a5838');
+      for (let yy = 56; yy < STREET_TOP; yy += 6) R(c, 0, yy, w, 1, '#6a4a2e');
+      for (let xx = 0; xx < w; xx += 26) R(c, xx, 54, 1, 18, '#5a3e26');
       let x = 0;
       while (x < w) {
         const bw = rng.int(62, 94), top = rng.int(54, 82);
@@ -901,9 +1295,9 @@ const THEMES: Record<string, Theme> = {
         x += bw + 2;
       }
       for (const s of sec.shops) { if (SHOPS[s.shop].venue === 'store') shopFront(c, s, 'istanbul'); else vendorBooth(c, s, 'istanbul'); }
-      // hanging lanterns
+      // hanging lanterns beneath the eaves
       for (let lx = 30; lx < w; lx += 96) {
-        R(c, lx, 44, 1, 12, '#3a2a1a'); R(c, lx - 3, 56, 7, 5, '#e8b040'); R(c, lx - 2, 57, 5, 2, '#fff0b0'); P(c, lx, 61, '#c88020');
+        R(c, lx, 54, 1, 12, '#3a2a1a'); R(c, lx - 3, 66, 7, 5, '#e8b040'); R(c, lx - 2, 67, 5, 2, '#fff0b0'); P(c, lx, 71, '#c88020');
       }
     },
     floor: (c, w, rng) => {
@@ -988,6 +1382,8 @@ const THEMES: Record<string, Theme> = {
   tpa_boardwalk: {
     sky: ['#1c74c8', '#2a86d6', '#3a9ae2', '#54b0ea', '#74c6f0', '#9cd8f6', '#c2e8fa'], sun: [322, 36, 16, '#fff6d0'],
     far: (c, w, rng) => {
+      // the afternoon sun, high and hard, with rays across the top of the sky
+      sunRays(c, 322, 36, 16, '#fff6c0');
       // the gulf: deep blue at the horizon, turquoise closer in
       sea(c, w, 92, 138, ['#1e6fa8', '#2a7fb4', '#2f8fbe', '#3aa2c8', '#4cb6d2'], 322, '#fff2c0', rng);
       R(c, 0, 92, w, 1, '#bfe6f2');
@@ -1023,11 +1419,13 @@ const THEMES: Record<string, Theme> = {
         R(c, x + 4, 122, 12, 3, rng.pick(['#4aa0d8', '#f0c850', '#e06a8a']));
       }
       // lifeguard tower
+      // lifeguard tower, raised so its cabin and flag clear the pastel roofs in front of it
       for (let x = 180; x < w; x += 520) {
-        R(c, x, 74, 26, 32, '#f6f4ee'); R(c, x, 74, 26, 4, '#e05a4a');
-        R(c, x - 4, 68, 34, 6, '#dcd8cc'); R(c, x + 6, 78, 14, 9, '#4a7a9a');
-        R(c, x - 2, 106, 4, 20, '#c8c4b8'); R(c, x + 24, 106, 4, 20, '#c8c4b8');
-        R(c, x + 30, 54, 2, 20, '#8a8a90'); R(c, x + 32, 54, 8, 5, '#e0303c');
+        R(c, x, 64, 26, 32, '#f6f4ee'); R(c, x, 64, 26, 4, '#e05a4a');
+        R(c, x - 4, 58, 34, 6, '#dcd8cc'); R(c, x + 6, 68, 14, 9, '#4a7a9a');
+        R(c, x - 2, 96, 4, 22, '#c8c4b8'); R(c, x + 24, 96, 4, 22, '#c8c4b8');
+        for (let k = 0; k < 3; k++) R(c, x - 2 + k * 12, 100 + k * 5, 30 - k * 12, 2, '#c8c4b8');
+        R(c, x + 30, 42, 2, 22, '#8a8a90'); R(c, x + 32, 42, 9, 6, '#e0303c');
       }
       for (let i = 0; i < 4; i++) { const x = rng.int(20, w - 20); R(c, x, rng.int(22, 58), 26, 5, '#f6fbff'); R(c, x + 6, rng.int(18, 54), 14, 5, '#f6fbff'); }
     },
@@ -1154,6 +1552,39 @@ const THEMES: Record<string, Theme> = {
   },
 };
 
+/** Street furniture for the peaceful stretches: benches, planters and lamps along the walk,
+ *  so a town section reads as a place to linger rather than a fight waiting to happen. */
+function plazaDressing(c: CanvasRenderingContext2D, w: number): void {
+  for (let x = 86; x < w - 60; x += 214) {
+    R(c, x, STREET_TOP - 15, 30, 2, '#8a6238');
+    R(c, x, STREET_TOP - 12, 30, 3, '#5e3f24');
+    R(c, x + 2, STREET_TOP - 9, 2, 9, '#33241a');
+    R(c, x + 26, STREET_TOP - 9, 2, 9, '#33241a');
+    for (let k = 0; k < 3; k++) R(c, x + 3 + k * 9, STREET_TOP - 14, 1, 2, '#a87a4a');
+    const px = x + 62;
+    R(c, px, STREET_TOP - 9, 18, 9, '#8a5a3a');
+    R(c, px, STREET_TOP - 10, 18, 2, '#a8703a');
+    disc(c, px + 9, STREET_TOP - 15, 8, '#2e6a32');
+    disc(c, px + 5, STREET_TOP - 12, 6, '#3a7a3a');
+    disc(c, px + 13, STREET_TOP - 12, 6, '#46843e');
+    P(c, px + 4, STREET_TOP - 18, '#e8d040');
+    // lamp post between the benches
+    const lx = x + 122;
+    R(c, lx, STREET_TOP - 42, 2, 42, '#2a2a32');
+    R(c, lx - 4, STREET_TOP - 44, 10, 3, '#3a3a44');
+    R(c, lx - 3, STREET_TOP - 48, 8, 4, '#f2d888');
+    c.globalAlpha = 0.18; disc(c, lx + 1, STREET_TOP - 46, 12, '#ffe8a0'); c.globalAlpha = 1;
+  }
+}
+
+// The peaceful stretches are the same neighbourhoods with the fight taken out, so they reuse
+// their chapter's street art and add plaza furniture in buildBackground. The keys stay
+// distinct: chapters reference them separately and a section's look is never shared by accident.
+THEMES.ny_plaza = THEMES.ny_block;
+THEMES.izm_plaza = THEMES.izm_bazaar;
+THEMES.ist_plaza = THEMES.ist_galata;
+THEMES.tpa_plaza = THEMES.tpa_boardwalk;
+
 export function buildBackground(theme: string, sec: SectionDef, seed: number): BgLayers {
   const t = THEMES[theme] ?? THEMES.ny_street;
   const rng = new Rng(seed);
@@ -1165,8 +1596,13 @@ export function buildBackground(theme: string, sec: SectionDef, seed: number): B
   const [far, fc] = canvas(SCREEN_W + (len - SCREEN_W) * farF + 2, STREET_TOP); t.far(fc, far.width, rng);
   const [mid, mc] = canvas(SCREEN_W + (len - SCREEN_W) * midF + 2, STREET_TOP); t.mid(mc, mid.width, rng);
   const [near, nc] = canvas(len, STREET_TOP); t.near(nc, len, rng, sec);
+  // pavement clutter for the whole chapter, keeping the boss arenas as bare as they read
+  if (!sec.boss) {
+    const kind: Furniture = theme.startsWith('izm_') ? 'izmir' : theme.startsWith('ist_') ? 'istanbul' : theme.startsWith('tpa_') ? 'tampa' : 'ny';
+    streetFurniture(nc, len, rng, sec, kind);
+  }
+  if (sec.peace) plazaDressing(nc, len);
   const [floor, flc] = canvas(len, SCREEN_H - STREET_TOP); t.floor(flc, len, rng);
-  const [fg, fgc] = canvas(SCREEN_W + (len - SCREEN_W) * fgF + 2, SCREEN_H);
-  void fgc;
+  const [fg] = canvas(SCREEN_W + (len - SCREEN_W) * fgF + 2, SCREEN_H);
   return { sky: sk, far, mid, near, floor, fg, farF, midF, fgF };
 }
