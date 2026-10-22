@@ -88,7 +88,9 @@ _Updated 2026-10-21._
   Rooms need no server: the room creator's tab is the authority and talks to the others
   through a Supabase Realtime broadcast channel, the same relay Leap Buddies uses, so a
   static host is enough for online co-op. The OG card and favicon are generated from the
-  game's own sheets and fonts (`npm run web-assets`).
+  game's own sheets and fonts (`npm run web-assets`). Because Pages project paths are
+  case-sensitive, the old `/KankaKombat/` URL is served by a forwarder page in the
+  `xiondigital.github.io` repo that carries `?room=` codes through to the live game.
 
 ## VISUALLY VERIFIED (rendered screenshots in `.freebuff/preview/audit/`)
 

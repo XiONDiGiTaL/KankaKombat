@@ -26,6 +26,11 @@ Pushing to `main` runs the tests, builds the client and publishes `dist/` to Git
 Pages (`.github/workflows/pages.yml`), so the live page at xiondigital.net/kankakombat
 is always the build from the tip of `main`.
 
+GitHub Pages matches project paths case-sensitively, so the pre-rename
+`xiondigital.net/KankaKombat/` address cannot be answered by this repo. It is forwarded
+by `KankaKombat/index.html` in the `xiondigital.github.io` repo, which keeps `?room=`
+invite codes intact.
+
 ## Features
 
 - **Two heroes** — B.T. (speed and combos) and S.C. (power and grapples) — each with
