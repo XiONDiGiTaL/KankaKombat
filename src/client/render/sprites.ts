@@ -44,6 +44,38 @@ export async function loadSheets(base: string, onProgress?: (done: number, total
 
 export function getSheet(id: string): Sheet | undefined { return sheets.get(id); }
 
+/** Opaque bounds of the named animations, unioned over their frames: `[x, y, w, h]` inside
+ *  the cell. Measured once per sheet, straight from the pixels, so UI that frames a sprite
+ *  can centre and baseline it without clipping hair or a raised arm. */
+const contentBoxes = new Map<string, [number, number, number, number]>();
+export function contentBox(sheet: Sheet, anims: string[]): [number, number, number, number] {
+  const key = `${sheet.atlas.id}:${anims.join(',')}`;
+  const memo = contentBoxes.get(key);
+  if (memo) return memo;
+  const [cw, ch] = sheet.atlas.cell;
+  const cv = document.createElement('canvas');
+  cv.width = sheet.img.width; cv.height = sheet.img.height;
+  const c = cv.getContext('2d', { willReadFrequently: true })!;
+  c.drawImage(sheet.img, 0, 0);
+  let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+  for (const name of anims) {
+    for (const f of sheet.atlas.anims[name]?.frames ?? []) {
+      const ox = (f.i % sheet.atlas.cols) * cw, oy = Math.floor(f.i / sheet.atlas.cols) * ch;
+      const px = c.getImageData(ox, oy, cw, ch).data;
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+        if (px[(y * cw + x) * 4 + 3] <= 24) continue;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  const box: [number, number, number, number] = x1 < 0 ? [0, 0, cw, ch] : [x0, y0, x1 - x0 + 1, y1 - y0 + 1];
+  contentBoxes.set(key, box);
+  return box;
+}
+
 /** Animation name for an entity's current state. */
 export function animFor(e: ViewEnt): string {
   switch (e.st) {

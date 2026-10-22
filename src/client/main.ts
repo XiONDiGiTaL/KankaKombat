@@ -14,7 +14,7 @@ import { Bot } from '../shared/sim/bot';
 import { decode, View } from '../shared/sim/snapshot';
 import type { SimEvent } from '../shared/sim/types';
 import { Renderer, SLOT_COLORS } from './render/renderer';
-import { getSheet, loadSheets } from './render/sprites';
+import { contentBox, getSheet, loadSheets } from './render/sprites';
 import { artCanvas, loadProps } from './render/art';
 import { drawText } from './render/font';
 import { Input, ACTIONS, keyLabel } from './input/input';
@@ -29,16 +29,6 @@ import { viewWorld } from './viewworld';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
 
-/** Full-body concept portraits used by the fighter select cards. */
-const PORTRAITS = new Map<string, HTMLImageElement>();
-function loadPortraits(): Promise<void> {
-  return Promise.all((['bt', 'sc'] as const).map((id) => new Promise<void>((res) => {
-    const img = new Image();
-    img.onload = () => { PORTRAITS.set(id, img); res(); };
-    img.onerror = () => res();
-    img.src = `./assets/portraits/${id}.png`;
-  }))).then(() => undefined);
-}
 const DEBUG = params.get('debug') === '1';
 const AUTOPILOT = params.get('autopilot') === '1';
 
@@ -84,7 +74,6 @@ class App {
     this.dctx.imageSmoothingEnabled = false;
     window.addEventListener('resize', () => this.fit());
     this.fit();
-    void loadPortraits();
     this.applyVideo();
     try {
       await Promise.all([
@@ -272,7 +261,7 @@ class App {
     for (const f of Object.values(FIGHTERS)) {
       const card = document.createElement('div');
       card.className = 'card'; card.tabIndex = 0; card.dataset.f = f.id;
-      // exactly 2x the 64x76 sprite cell, so nearest-neighbour scaling stays even
+      // the backing store follows the CSS box in drawCards; this is just a sane first size
       const cv = document.createElement('canvas'); cv.width = 128; cv.height = 152;
       // One grid for the whole stat block: the labels share the auto-sized first column
       // and the tracks take the rest, so both fighters' bars line up (see .stats).
@@ -293,41 +282,65 @@ class App {
     wrap.querySelectorAll('.card').forEach((c) => c.classList.toggle('on', (c as HTMLElement).dataset.f === this.fighter));
   }
 
-  /** Fighter cards: the approved concept portraits, framed as a bust. */
+  /** Fighter cards: the in-game sprite on a select-screen backdrop. Every card shares one
+   *  whole-pixel scale and one floor line, and each fighter is centred on his own opaque
+   *  bounds, so the two stand at matching size on the same baseline and nothing is cropped. */
   drawCards(): void {
     if (this.screen !== 'select') return;
-    document.querySelectorAll<HTMLElement>('#cards .card').forEach((card) => {
-      const cv = card.querySelector('canvas')!; const c = cv.getContext('2d')!;
-      // The frame stretches to the card height, so the backing store follows it and the
-      // portrait always fills the frame instead of leaving a gap under the bust.
+    const pad = 8, floorGap = 12;
+    const cards = [...document.querySelectorAll<HTMLElement>('#cards .card')].map((card) => {
+      const cv = card.querySelector('canvas')!;
+      // The frame stretches to the card height: follow it so the sprite is never squeezed.
       const boxW = Math.round(cv.clientWidth), boxH = Math.round(cv.clientHeight);
       if (boxW && boxH && (cv.width !== boxW || cv.height !== boxH)) { cv.width = boxW; cv.height = boxH; }
-      const id = card.dataset.f!;
-      const portrait = PORTRAITS.get(id);
-      if (portrait && portrait.complete && portrait.naturalWidth) {
-        // crop the head-and-shoulders out of the full-body portrait and cover the card
-        const bh = portrait.naturalHeight * 0.5, bw = bh * (cv.width / cv.height);
-        const bx = (portrait.naturalWidth - bw) / 2;
-        c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-        c.clearRect(0, 0, cv.width, cv.height);
-        c.drawImage(portrait, bx, 0, bw, bh, 0, 0, cv.width, cv.height);
-        return;
-      }
-      const t = Math.floor(performance.now() / (1000 / 60));
-      const sheet = getSheet(id);
-      if (!sheet) return;
+      const sheet = getSheet(card.dataset.f!);
+      return { card, cv, sheet, box: sheet ? contentBox(sheet, ['idle', 'ready']) : null };
+    });
+    // One scale for the whole row: the largest whole multiple of the sprite that still fits
+    // the tightest frame. Halving each card separately would make the fighters differ in size.
+    let scale = 0;
+    for (const { cv, box } of cards) {
+      if (!box) continue;
+      const fit = Math.floor(Math.min((cv.width - pad * 2) / box[2], (cv.height - pad * 2 - floorGap) / box[3]));
+      scale = scale ? Math.min(scale, Math.max(1, fit)) : Math.max(1, fit);
+    }
+    const t = Math.floor(performance.now() / (1000 / 60));
+    for (const { card, cv, sheet, box } of cards) {
+      const c = cv.getContext('2d')!;
+      c.imageSmoothingEnabled = false;
+      c.clearRect(0, 0, cv.width, cv.height);
+      const floor = cv.height - floorGap;
+      // backdrop: dusk gradient, a halo behind the fighter, a faint checker so the flat
+      // panel reads as a screen rather than a photo, then the floor the fighter stands on.
+      const bg = c.createLinearGradient(0, 0, 0, floor);
+      bg.addColorStop(0, '#514070'); bg.addColorStop(0.6, '#33264a'); bg.addColorStop(1, '#241a34');
+      c.fillStyle = bg; c.fillRect(0, 0, cv.width, floor);
+      const halo = c.createRadialGradient(cv.width / 2, floor - cv.height * 0.34, 2, cv.width / 2, floor - cv.height * 0.34, cv.height * 0.6);
+      halo.addColorStop(0, 'rgba(246,232,184,0.15)'); halo.addColorStop(1, 'rgba(246,232,184,0)');
+      c.fillStyle = halo; c.fillRect(0, 0, cv.width, floor);
+      c.fillStyle = 'rgba(255,255,255,0.03)';
+      for (let y = 0; y < floor; y += 8) for (let x = (y / 8) % 2 ? 8 : 0; x < cv.width; x += 16) c.fillRect(x, y, 8, 8);
+      c.fillStyle = '#1a1220'; c.fillRect(0, floor, cv.width, cv.height - floor);
+      c.fillStyle = '#6a5686'; c.fillRect(0, floor, cv.width, 1);
+      if (!sheet || !box || !scale) continue;
       const on = card.classList.contains('on');
-      const anim = sheet.atlas.anims[on ? 'ready' : 'idle'];
+      const anim = sheet.atlas.anims[on ? 'ready' : 'idle'] ?? sheet.atlas.anims.idle;
       const total = anim.frames.reduce((s, f) => s + f.t, 0);
       let tt = t % total, fi = anim.frames[0].i;
       for (const f of anim.frames) { if (tt < f.t) { fi = f.i; break; } tt -= f.t; }
       const [cw, ch] = sheet.atlas.cell;
-      c.imageSmoothingEnabled = false;
-      c.clearRect(0, 0, cv.width, cv.height);
-      const scale = Math.min(cv.width / cw, cv.height / ch);
-      c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw, Math.floor(fi / sheet.atlas.cols) * ch, cw, ch,
-        0, cv.height - ch * scale, cw * scale, ch * scale);
-    });
+      const w = box[2] * scale, h = box[3] * scale;
+      const dx = Math.round((cv.width - w) / 2), dy = floor - h;
+      // contact shadow, then the sprite with his feet exactly on the floor line
+      c.save();
+      c.translate(cv.width / 2, floor); c.scale(1, 0.18);
+      const shadow = c.createRadialGradient(0, 0, 1, 0, 0, w * 0.55);
+      shadow.addColorStop(0, 'rgba(10,7,16,0.6)'); shadow.addColorStop(1, 'rgba(10,7,16,0)');
+      c.fillStyle = shadow; c.beginPath(); c.arc(0, 0, w * 0.55, 0, Math.PI * 2); c.fill();
+      c.restore();
+      c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw + box[0], Math.floor(fi / sheet.atlas.cols) * ch + box[1],
+        box[2], box[3], dx, dy, w, h);
+    }
   }
 
   drawLogo(): void {

@@ -86,7 +86,7 @@ input[type=range] { accent-color: var(--gold); width: 200px; }
 .card { background: var(--panel2); border: 3px solid var(--ink); box-shadow: 0 0 0 2px #5a4a70; padding: 10px; cursor: pointer; display: flex; gap: 10px; align-items: stretch; }
 .card > div { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .card.on { box-shadow: 0 0 0 3px var(--gold); background: #3a2a52; }
-.card canvas { width: 128px; height: auto; min-height: 152px; border: 2px solid var(--ink); background: #8fb4c8; flex: none; align-self: stretch; }
+.card canvas { width: 128px; height: auto; min-height: 172px; border: 2px solid var(--ink); background: #241a34; image-rendering: pixelated; flex: none; align-self: stretch; }
 .card h3 { margin: 0 0 6px; font-size: 14px; color: var(--gold); }
 .card p { font-size: 8px; color: var(--muted); line-height: 1.8; margin: 4px 0; }
 /* Stat block. One grid per card: the labels share an auto column and the tracks fill

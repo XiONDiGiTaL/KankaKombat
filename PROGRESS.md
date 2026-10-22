@@ -94,7 +94,9 @@ _Updated 2026-10-21._
   Turning that into a real edge `301` (plus asset caching) needs the domain proxied
   through Cloudflare; the runbook is [docs/cloudflare.md](docs/cloudflare.md).
 - Fighter select: one grid per stat block, so both heroes' bars share the same labels,
-  the same track width and a segmented empty track; the bust fills the card frame.
+  the same track width and a segmented empty track. The cards show the in-game sprite on a
+  dusk backdrop, sized from its own opaque bounds: both cards use one whole-pixel scale and
+  one floor line, so the two stand at matching size and nothing is cropped.
 - The name field is this player's own tag, not a room title, and the screen now says so
   in both languages.
 
