@@ -93,11 +93,17 @@ export class Input {
     if (this.capture && down) { e.preventDefault(); const c = this.capture; this.capture = null; c(e.code); return; }
     if (down && (e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) { this.onPause(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return; // leave browser shortcuts alone
+    // Whether the game takes this key is decided by the screen it was pressed on. The press
+    // callbacks below can open or close a menu, and that must not retroactively turn the same
+    // press into a gameplay input: Enter on RESUME resumed and then instantly re-paused,
+    // because the button handler had already set `enabled` back to true by the time the bit
+    // was stored.
+    const enabled = this.enabled;
     const bit = this.bitFor(e.code);
     if (down && !e.repeat) { this.onAnyKey(e.code); if (bit) this.onPress(bit); }
     if (!bit) return;
-    if (this.enabled) e.preventDefault();
-    if (down) { if (!this.keyHeld.has(e.code) && this.enabled) this.pressed |= bit; this.keyHeld.add(e.code); }
+    if (enabled) e.preventDefault();
+    if (down) { if (!this.keyHeld.has(e.code) && enabled) this.pressed |= bit; this.keyHeld.add(e.code); }
     else this.keyHeld.delete(e.code);
   }
 

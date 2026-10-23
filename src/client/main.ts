@@ -76,6 +76,8 @@ class App {
   /** First-street control card: counts down in ticks, one showing per game start. */
   private legendT = 0;
   private legendShown = false;
+  /** Mirror of the CLOSE chip's visibility, so the draw loop only touches the DOM on a change. */
+  private legendBtnOn = false;
   private acc = 0;
   private last = performance.now();
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -191,9 +193,28 @@ class App {
     // start the game and then act on the screen it just opened.
     this.input.onPress = (bit) => this.menuKey(bit);
     this.input.onPadConnect = (name) => this.toast(tr('CONTROLLER CONNECTED') + (name ? `: ${name.slice(0, 28)}` : ''));
-    window.addEventListener('keydown', (e) => { if (this.screen === 'title' && e.key === 'Enter') e.preventDefault(); }, true);
+    // Menus confirm by clicking the focused button themselves. Without this the browser then
+    // activates that same button from the same keypress (Enter on keydown, Space on keyup),
+    // so RESUME closed the pause and reopened it in one press. Menus claim both keys for
+    // their own confirm; text fields keep them.
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (this.screen === 'none' || this.screen === 'loading') return;
+      // only a focused button gets a second, browser-driven activation from the same press;
+      // elsewhere the key is ours without blocking scrolling or a focused link
+      if (t?.tagName === 'BUTTON') e.preventDefault();
+      else if (this.screen === 'title' && e.key === 'Enter') e.preventDefault();
+    }, true);
     this.input.onPause = () => this.togglePause();
     $('pause-btn').addEventListener('click', () => this.togglePause());
+    $('legend-close').addEventListener('click', (e) => {
+      // the chip is a one-shot HUD control: do not leave focus on it during the fight
+      (e.currentTarget as HTMLElement).blur();
+      this.dismissLegend();
+      this.audio.sfx('ui');
+    });
     $('resume').addEventListener('click', () => this.togglePause());
     $('quit').addEventListener('click', () => this.quitToTitle());
     this.buildCards();
@@ -737,6 +758,19 @@ class App {
     if (!inShop && this.screen === 'shop') { this.go('none', false); this.shopPending = null; this.shopMsg = ''; }
   }
 
+  /** The control card's CLOSE chip: a mouse or a touch can put the card away at once, and
+   *  the fade clock then has nothing left to show. */
+  dismissLegend(): void {
+    this.legendT = 0;
+    this.syncLegendButton(false);
+  }
+
+  private syncLegendButton(on: boolean): void {
+    if (this.legendBtnOn === on) return;
+    this.legendBtnOn = on;
+    $('legend-close').classList.toggle('show', on);
+  }
+
   flashShop(msg: string): void {
     this.shopMsg = msg;
     if (this.shopMsgTimer) clearTimeout(this.shopMsgTimer);
@@ -903,9 +937,9 @@ class App {
       if (!this.paused) this.crowd.step(v.camX);
       this.renderer.render(v, !!this.client);
       this.dctx.drawImage(this.renderer.canvas, 0, 0);
-      if (this.client && this.screen === 'none' && !this.paused && !v.training && v.chapter === 0 && v.section === 0 && this.legendT > 0) {
-        drawControlLegend(this.dctx, legendRows(this.input.keys), legendAlpha(this.legendT));
-      }
+      const legendOn = !!this.client && this.screen === 'none' && !this.paused && !v.training && v.chapter === 0 && v.section === 0 && this.legendT > 0;
+      if (legendOn) drawControlLegend(this.dctx, legendRows(this.input.keys), legendAlpha(this.legendT));
+      this.syncLegendButton(legendOn);
       this.lastView = v;
       if (this.client) {
         this.updateShop(v);
@@ -922,6 +956,7 @@ class App {
       this.dctx.fillStyle = '#0e0a14'; this.dctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
       // every out-of-game screen shares the title theme; the city theme takes over on start
       if (this.screen !== 'loading' && this.screen !== 'pause') this.audio.music('title');
+      this.syncLegendButton(false);
     }
     this.drawCards();
   }

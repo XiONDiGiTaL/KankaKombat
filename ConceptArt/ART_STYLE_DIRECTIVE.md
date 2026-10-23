@@ -74,7 +74,7 @@ These sheets are *concept* references. When producing game-ready assets:
 Food pickups, drawn big and readable at gameplay size with a pixel sparkle —
 the health/energy currency of the game. Locked set: **Lahmacun** (flat +
 rolled), **Ayran** (sealed cup), **Nutella** (jar), **Bananas** (bunch),
-**Baklava** (tray, pistachio top), **Sujuk** (horseshoe sausage ring). New
+**Baklava** (tray, pistachio top), **Sucuk** (horseshoe sausage ring). New
 pickups join this sheet's style: same pixel density, dark outlines, sparkle.
 
 ## Enemies (same sheet layout as the heroes)
@@ -141,7 +141,7 @@ readout) over the scene. Rules:
 - Buying is instant-use or carry-one-item; the player cannot be attacked
   inside a shop; exiting returns them to the exact spot outside the door.
 - Prices on the concept (Lahmacun 50, Ayran 30, Bananas 40, Baklava 80,
-  Sujuk 90, Nutella 150) set the food economy: price tracks heal value,
+  Sucuk 90, Nutella 150) set the food economy: price tracks heal value,
   Nutella is the rare full restore.
 
 ## Localisation (EN / TR)

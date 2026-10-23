@@ -10,9 +10,12 @@ import { keyLabel } from '../input/input';
 
 export interface LegendRow { action: string; keys: string; pad: string }
 
-/** How long the card is shown, in 60 Hz ticks, and how long the tail fade lasts. */
-export const LEGEND_TICKS = 690;
-export const LEGEND_FADE = 90;
+/** How long the card is shown, in 60 Hz ticks, and how long the tail fade lasts.
+ *  It is a reminder for the first few seconds of the first street, not a screen: the CLOSE
+ *  chip dismisses it at once, so it does not need to linger (5.5 s, fading over the last
+ *  0.75 s). */
+export const LEGEND_TICKS = 330;
+export const LEGEND_FADE = 45;
 
 /** 1 while fully visible, easing to 0 over the last LEGEND_FADE ticks. */
 export function legendAlpha(t: number): number {

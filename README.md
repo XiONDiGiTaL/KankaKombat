@@ -96,7 +96,7 @@ Cloudflare; the exact records, rule expressions and verification steps are in
   you can walk into is marked from across the street: a bobbing `SHOP` tag carrying the
   city's coin, a chevron pointing at the door and a lit threshold on the pavement,
   brightening as the player walks up.
-- **Economy** — Ayran 30, Bananas 40, Lahmacun 50, Baklava 80, Sujuk 90, Nutella 150.
+- **Economy** — Ayran 30, Bananas 40, Lahmacun 50, Baklava 80, Sucuk 90, Nutella 150.
   One wallet all campaign; the symbol changes to ₺ or $ with the city.
 - **Bilingual UI** — English / Türkçe switch in the main menu and settings, persisted
   with all player-facing menus, help, shop dialogue, chapter and boss text.

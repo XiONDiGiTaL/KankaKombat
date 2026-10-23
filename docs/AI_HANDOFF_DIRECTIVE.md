@@ -55,7 +55,7 @@ Currency rule: money carries over between chapters and is **converted at the cha
 | Nutella | small heal |
 | Banana | small heal plus a short speed buff |
 | Baklava | moderate heal |
-| Sujuk | moderate heal plus a short damage buff |
+| Sucuk | moderate heal plus a short damage buff |
 | Lahmacun | full heal |
 | Ayran | +1 life (capped) |
 

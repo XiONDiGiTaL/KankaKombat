@@ -48,6 +48,7 @@ export const TR: Record<string, string> = {
   'BACK TO LOBBY': 'ODAYA DÖN',
   'PLAY AGAIN': 'TEKRAR OYNA',
   'CONTROLS': 'KONTROLLER',
+  'CLOSE': 'KAPAT',
   '(click a key to remap)': '(tuşu değiştirmek için tıkla)',
   'RESET KEYS': 'TUŞLARI SIFIRLA',
   'FIGHTING': 'DÖVÜŞ',
@@ -79,7 +80,7 @@ export const TR: Record<string, string> = {
   // ---- credits
   'Design, code, pixel art & chiptunes generated for XiØN / XiONDiGiTaL. All characters, sprites, music and sound are original to this game. Fonts built from the game’s own lettering sheet. Nutella is a trademark of Ferrero; it appears here only as a food item. No affiliation.': 'Tasarım, kod, piksel sanat ve chiptune’lar XiØN / XiONDiGiTaL için üretildi. Tüm karakterler, sprite’lar, müzik ve sesler bu oyuna özgüdür. Yazı tipleri oyunun kendi harf sayfasından üretildi. Nutella, Ferrero’nun ticari markasıdır; burada yalnızca yiyecek olarak geçer. Bağlantı yoktur.',
   // ---- item names / descriptions
-  'Ayran': 'Ayran', 'Bananas': 'Muz', 'Lahmacun': 'Lahmacun', 'Baklava': 'Baklava', 'Sujuk': 'Sucuk', 'Nutella': 'Nutella',
+  'Ayran': 'Ayran', 'Bananas': 'Muz', 'Lahmacun': 'Lahmacun', 'Baklava': 'Baklava', 'Sucuk': 'Sucuk', 'Nutella': 'Nutella',
   'Small heal.': 'Küçük iyileşme.', 'Medium heal.': 'Orta iyileşme.', 'Large heal.': 'Büyük iyileşme.', 'Full restore. Rare.': 'Tam iyileşme. Nadir.',
   'FULL HP': 'TAM CAN', 'BAG': 'ÇANTA', 'WALLET': 'CÜZDAN',
   // ---- stage names
