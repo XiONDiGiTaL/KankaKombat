@@ -155,6 +155,11 @@ export const TR: Record<string, string> = {
   // ---- in-game HUD / control legend
   'COMBO': 'KOMBO',
   'MOVE': 'HAREKET', 'LIGHT': 'HAFİF', 'HEAVY': 'AĞIR', 'JUMP': 'ZIPLA', 'GRAB': 'TUT',
+  'TRAINING': 'ANTRENMAN', 'TRAINING ROOM': 'ANTRENMAN SALONU',
+  "DRAGON'S DEN GYM": 'EJDER İNİ SALONU', 'DUMMY': 'KUKLA',
+  'GRAB - SLAP - THROW': 'TUT - ŞAMAR - FIRLAT',
+  'DUMMY RESETS WHEN KNOCKED DOWN': 'KUKLA YIKILINCA YENİDEN DİKİLİR',
+  'Training room: pick a fighter, then TRAINING to practise grab, slap and throw timing on a dummy that sets itself back up after every knockdown.': 'Antrenman salonu: bir dövüşçü seç, sonra ANTRENMAN ile her yıkılışta yeniden dikilen kuklada tutma, şamar ve fırlatma zamanlamasını çalış.',
   'BLOCK': 'BLOK', 'DODGE': 'ATIL', 'RUN': 'KOŞ', 'EAT': 'YE', 'NEXT ITEM': 'SONRAKİ',
   'PAUSE': 'DURAKLAT', 'KEYBOARD': 'KLAVYE', 'PAD': 'KOL', 'D-PAD/STICK': 'YÖN/ÇUBUK',
   'Move left': 'Sola git', 'Move right': 'Sağa git', 'Move up (into the street)': 'Yukarı git (sokağa)', 'Move down (toward you)': 'Aşağı git (sana doğru)',

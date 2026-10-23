@@ -6,7 +6,7 @@ import { BTN } from '../shared/data/input';
 import { FIGHTERS, FighterDef, FighterId, SECRET_OF, STARTER_IDS } from '../shared/data/fighters';
 import { ITEMS, ITEM_IDS, ItemId } from '../shared/data/items';
 import { SHOPS } from '../shared/data/shops';
-import { CHAPTERS } from '../shared/data/stages';
+import { CHAPTERS, sectionAt } from '../shared/data/stages';
 import { formatMoney } from '../shared/data/currency';
 import { BRANDING } from '../shared/config/branding';
 import { makeRoomCode, normalizeRoomCode } from '../shared/net/protocol';
@@ -200,6 +200,7 @@ class App {
     this.syncSound();
     $<HTMLInputElement>('name').value = loadSettings().name;
     $('solo-start').addEventListener('click', () => this.startSolo());
+    $('training-start').addEventListener('click', () => this.startTraining());
     $('create-room').addEventListener('click', () => void this.createRoom());
     $('join-room').addEventListener('click', () => void this.joinRoom());
     $<HTMLInputElement>('join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') void this.joinRoom(); });
@@ -604,6 +605,16 @@ class App {
     this.go('none', false); this.back = [];
   }
 
+  /** The practice room: same local authority as solo play, started in the gym section. */
+  startTraining(): void {
+    const link = new LocalLink('TRAIN', { allowDebugStart: true, training: true });
+    const c = this.attach(link);
+    c.send({ t: 'ready', r: true });
+    c.send({ t: 'start' });
+    this.paused = false;
+    this.go('none', false); this.back = [];
+  }
+
   async createRoom(): Promise<void> {
     try {
       if (netMode === 'server') {
@@ -742,7 +753,7 @@ class App {
   shopInput(pressed: number, v: View): void {
     const me = this.renderer.localEnt(v);
     if (!me) return;
-    const sec = CHAPTERS[v.chapter].sections[v.section];
+    const sec = sectionAt(v.chapter, v.section, v.training);
     const spot = sec.shops.find((s) => Math.abs(me.x - s.x) < 24);
     if (!spot) return;
     const stock = SHOPS[spot.shop].stock;
@@ -852,7 +863,7 @@ class App {
       const v = c.latest();
       // the legend belongs to the first street and fades on its own clock, so a pause
       // freezes it too instead of burning its time behind the pause screen
-      if (v && !this.paused && this.screen === 'none' && v.chapter === 0 && v.section === 0) {
+      if (v && !this.paused && this.screen === 'none' && !v.training && v.chapter === 0 && v.section === 0) {
         if (!this.legendShown) { this.legendShown = true; this.legendT = LEGEND_TICKS; }
         else if (this.legendT > 0) this.legendT--;
       }
@@ -886,13 +897,13 @@ class App {
       this.renderer.shopSel = this.shopSel;
       this.renderer.shopMsg = this.shopMsg;
       // townsfolk only walk the peaceful stretches; fighting sections get an empty street
-      const sec = CHAPTERS[v.chapter].sections[v.section];
+      const sec = sectionAt(v.chapter, v.section, v.training);
       this.renderer.crowd = this.crowd;
-      this.crowd.reset(`${v.chapter}.${v.section}`, sec.peace ? 5 : 0);
+      this.crowd.reset(v.training ? 'training' : `${v.chapter}.${v.section}`, sec.peace ? 5 : 0);
       if (!this.paused) this.crowd.step(v.camX);
       this.renderer.render(v, !!this.client);
       this.dctx.drawImage(this.renderer.canvas, 0, 0);
-      if (this.client && this.screen === 'none' && !this.paused && v.chapter === 0 && v.section === 0 && this.legendT > 0) {
+      if (this.client && this.screen === 'none' && !this.paused && !v.training && v.chapter === 0 && v.section === 0 && this.legendT > 0) {
         drawControlLegend(this.dctx, legendRows(this.input.keys), legendAlpha(this.legendT));
       }
       this.lastView = v;
@@ -923,6 +934,7 @@ class App {
   music(v: View): void {
     if (v.phase === 'victory') this.audio.music('victory');
     else if (v.phase === 'gameover' || v.phase === 'final') this.audio.stopMusic();
+    else if (v.training) this.audio.music('title');
     else this.audio.music(CHAPTERS[v.chapter].music);
   }
 
@@ -995,7 +1007,7 @@ class App {
         case 'die': a.sfx('ko'); break;
         case 'respawn': { const t = ent(e.id); if (t) fx.sparkle(t.x, 30, t.z, '#ffffff'); break; }
         case 'go': a.sfx('go'); break;
-        case 'section': if (CHAPTERS[e.ch].sections[e.se].boss) a.sfx('boss'); break;
+        case 'section': if (sectionAt(e.ch, e.se).boss) a.sfx('boss'); break;
         case 'convert': this.toast('One wallet, all streets — cash carries over.'); break;
         case 'horn': a.sfx(e.kind === 'tram' ? 'bell' : 'horn'); break;
         case 'proj': a.sfx('toss'); break;

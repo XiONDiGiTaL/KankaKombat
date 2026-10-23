@@ -23,6 +23,7 @@ export interface SectionDef {
   length: number;
   theme: string;               // background renderer key
   peace?: boolean;             // a walkable town stretch: no waves, no hazards, townsfolk
+  training?: boolean;          // the practice room: no waves, no exit, a respawning dummy
   waves: Wave[];
   props: PropDef[];
   shops: ShopSpot[];
@@ -230,6 +231,27 @@ export const CHAPTERS: ChapterDef[] = [
     ],
   },
 ];
+
+/** The practice room off the main menu. It is deliberately not part of CHAPTERS: the campaign
+ *  advances through the four cities and never walks into the gym, and the flow tests keep
+ *  measuring only the story sections. The training flag tells the simulation to skip waves,
+ *  exits and hazards and to keep the dummy coming back. */
+export const TRAINING: SectionDef = {
+  name: "Dragon's Den Gym",
+  length: 503,                 // one painted strip wide: the room never repeats
+  theme: 'gym',
+  training: true,
+  waves: [],
+  props: [],
+  shops: [],
+};
+
+/** Resolve a section anywhere in the game. Training is a mode of its own, not a chapter, so
+ *  callers that only have a snapshot need this rather than indexing CHAPTERS directly. */
+export function sectionAt(ch: number, se: number, training = false): SectionDef {
+  if (training) return TRAINING;
+  return CHAPTERS[ch]?.sections[se] ?? CHAPTERS[0].sections[0];
+}
 
 /** Every destructible takes three hits: intact → damaged → smashed. */
 export const PROP_HP: Record<string, number> = { crate: 3, barrel: 3, bin: 3, box: 3, mailbox: 3 };

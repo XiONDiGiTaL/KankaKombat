@@ -4,7 +4,7 @@
 
 import { BODY_HALF_W, GRAVITY, MAX_ENEMIES_ALIVE, RESPAWN_INVULN, SCREEN_W, START_LIVES, STREET_DEPTH, CONTINUE_TICKS, MAX_PLAYERS } from '../data/constants';
 import { InputFrame, NO_INPUT } from '../data/input';
-import { CHAPTERS, ChapterDef, PROP_HP, SectionDef } from '../data/stages';
+import { CHAPTERS, ChapterDef, PROP_HP, SectionDef, TRAINING } from '../data/stages';
 import { ENEMIES } from '../data/enemies';
 import { FIGHTERS, FighterId } from '../data/fighters';
 import { Currency } from '../data/currency';
@@ -17,7 +17,7 @@ import { updatePickups, spawnCoin, spawnFood, buyItem, useItem } from './items';
 
 export interface SpawnQ { e: string; side: 'L' | 'R'; z: number; t: number; wave: number }
 
-export interface SimOptions { seed?: number; chapter?: number; section?: number; godMode?: boolean }
+export interface SimOptions { seed?: number; chapter?: number; section?: number; godMode?: boolean; training?: boolean }
 
 export class Sim {
   tick = 0;
@@ -45,6 +45,11 @@ export class Sim {
   continueT = 0;
   continues = 0;
   godMode: boolean;
+  /** the practice room: no waves, no exit, and a dummy that always comes back */
+  training: boolean;
+  trainingDummyId = -1;
+  private dummyHomeX = 0;
+  private dummyHomeZ = 0;
   /** player records kept while a player is disconnected so they can rejoin intact */
   away = new Map<string, Ent>();
 
@@ -53,11 +58,12 @@ export class Sim {
     this.chapter = opts.chapter ?? 0;
     this.section = opts.section ?? 0;
     this.godMode = !!opts.godMode;
+    this.training = !!opts.training;
     this.currency = this.chapterDef.currency;
   }
 
   get chapterDef(): ChapterDef { return CHAPTERS[this.chapter]; }
-  get sectionDef(): SectionDef { return this.chapterDef.sections[this.section]; }
+  get sectionDef(): SectionDef { return this.training ? TRAINING : this.chapterDef.sections[this.section]; }
   players(): Ent[] { return this.ents.filter((e) => e.kind === 'p' && !e.removed); }
   livePlayers(): Ent[] { return this.players().filter((p) => p.st !== 'out' && p.st !== 'dead' && p.hp > 0); }
   enemies(): Ent[] { return this.ents.filter((e) => e.kind === 'e' && !e.removed); }
@@ -179,6 +185,23 @@ export class Sim {
     this.camX = 0; this.camMin = 0; this.lockX = null; this.waveIdx = 0; this.waveAlive.clear(); this.spawnQ = [];
     this.ents = this.ents.filter((e) => e.kind === 'p');
     this.pickups = []; this.projs = [];
+    if (def.training) {
+      // one open room, no waves, no exit: the player starts on the mats with the dummy
+      // a few steps away, and the stock dummy is spawned at its mark
+      this.props = []; this.hazards = []; this.bossId = -1;
+      for (const p of this.players()) {
+        p.hold = -1; p.heldBy = -1; p.hp = p.maxHp;
+        p.x = 150 + p.slot * 22; p.z = 34; p.y = 0; p.face = 1;
+        p.vx = p.vy = p.vz = 0; p.inv = 45;
+        setState(p, 'idle');
+      }
+      const d = this.spawnEnemy('dummy', 'R', 30, -1);
+      d.x = 300; d.z = 30; d.face = -1;
+      this.trainingDummyId = d.id; this.dummyHomeX = d.x; this.dummyHomeZ = d.z;
+      this.phase = 'intro'; this.phaseT = 0;
+      this.emit({ k: 'section', ch, se });
+      return;
+    }
     this.props = def.props.map((pd) => ({ id: this.nextId++, kind: pd.kind, x: pd.x, z: pd.z, hp: PROP_HP[pd.kind] ?? 2, broken: false, drop: pd.drop, brokeT: 0 }));
     for (const f of def.food ?? []) spawnFood(this, f.item, f.x, f.z, 0);
     this.hazards = (def.hazards ?? []).map((h) => ({ kind: h.kind, state: 0, x: -999, dir: 1, z0: h.z0, z1: h.z1, hits: [] }));
@@ -214,8 +237,9 @@ export class Sim {
 
   private updateWaves(): void {
     const def = this.sectionDef;
-    // peaceful stretches are a town, not a fight: no waves, no camera locks
-    if (def.peace) return;
+    // peaceful stretches are a town, not a fight: no waves, no camera locks; the training
+    // room never spawns anything but its permanent dummy
+    if (def.peace || def.training) return;
     // trigger the next wave when the camera reaches it
     if (this.lockX === null && this.waveIdx < def.waves.length && this.camX >= def.waves[this.waveIdx].at) {
       const w = def.waves[this.waveIdx];
@@ -362,6 +386,12 @@ export class Sim {
 
   private updateLife(e: Ent): void {
     if (e.kind === 'e') {
+      // the dummy never dies or drops loot: it is put back on its stand below
+      if (ENEMIES[e.def]?.dummy) {
+        e.hp = e.maxHp;
+        if (e.st === 'dead') setState(e, 'down');
+        return;
+      }
       if (e.hp <= 0 && !e.rewarded) this.reward(e);
       if (e.st === 'dead' && e.t > 70) e.removed = true;
       return;
@@ -380,6 +410,7 @@ export class Sim {
 
   /** Awarded exactly once per enemy: the `rewarded` flag is the guard. */
   reward(e: Ent): void {
+    if (ENEMIES[e.def]?.dummy) return;
     e.rewarded = true;
     const def = ENEMIES[e.def];
     this.emit({ k: 'ko', id: e.id, boss: e.boss });
@@ -440,14 +471,18 @@ export class Sim {
         else controlPlayer(this, e, inp);
         const stored = this.inputs.get(e.id);
         if (stored) stored.pressed = 0;
-      } else if (this.phase !== 'bossintro' && this.phase !== 'bossdown') aiTick(this, e);
-      else if (e.st !== 'idle' && e.st !== 'dead' && e.st !== 'knock' && e.st !== 'down') updateCombat(this, e);
+      } else if (this.phase !== 'bossintro' && this.phase !== 'bossdown') {
+        // the dummy has no brain to tick: it only advances its own hurt/knockdown timers
+        if (e.def === 'dummy') updateCombat(this, e);
+        else aiTick(this, e);
+      } else if (e.st !== 'idle' && e.st !== 'dead' && e.st !== 'knock' && e.st !== 'down') updateCombat(this, e);
       this.updatePhysics(e);
       this.updateLife(e);
     }
     this.ents = this.ents.filter((e) => !e.removed);
     updateProjectiles(this);
     updatePickups(this);
+    if (this.training) this.updateTrainingDummy();
     for (const pr of this.props) if (pr.broken) pr.brokeT++;
     if (this.phase === 'play') { this.updateWaves(); this.updateHazards(); this.updateCamera(); this.checkExit(); }
     else if (this.phase === 'boss') { this.checkBoss(); this.updateCamera(); }
@@ -457,8 +492,24 @@ export class Sim {
     }
   }
 
+  /** Keep the practice dummy alive and put it back on its mark once a knockdown has
+   *  played out. The throw can fling it across the room; this is the "respawn". */
+  private updateTrainingDummy(): void {
+    const d = this.byId(this.trainingDummyId);
+    if (!d) return;
+    if (d.hp < d.maxHp) d.hp = d.maxHp;
+    if (d.st === 'dead') setState(d, 'down');
+    if (d.st !== 'idle') return;
+    if (Math.abs(d.x - this.dummyHomeX) < 1 && Math.abs(d.z - this.dummyHomeZ) < 1) return;
+    d.x = this.dummyHomeX; d.z = this.dummyHomeZ; d.y = 0;
+    d.vx = d.vy = d.vz = 0; d.face = -1;
+    d.inv = Math.max(d.inv, 20);
+    this.emit({ k: 'respawn', id: d.id });
+  }
+
   private checkExit(): void {
     const def = this.sectionDef;
+    if (def.training) return;
     if (this.waveIdx < def.waves.length || this.lockX !== null || this.spawnQ.length) return;
     if (this.enemies().some((e) => e.hp > 0)) return;
     const ps = this.livePlayers();

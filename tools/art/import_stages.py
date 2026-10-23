@@ -49,6 +49,8 @@ STAGES = {
     "bazaar": dict(file="bazaar.jpg", ground=790, scale=0.170, shops=[(0.086, "vendor"), (0.279, "vendor"), (0.503, "vendor"), (0.718, "vendor"), (0.920, "vendor")]),
     "tampa": dict(file="tampa_beach.jpg", ground=590, scale=0.230, shops=[(0.442, "store"), (0.849, "vendor")]),
     "subway": dict(file="subway.png", ground=330, scale=0.410, shops=[]),
+    # the training room: a single painted gym wall, with the ring centred in the strip
+    "gym": dict(file="dragons_den.png", ground=634, scale=0.214, shops=[]),
 }
 
 

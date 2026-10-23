@@ -31,8 +31,8 @@ export class LocalLink implements Link {
   onMessage: (m: ServerMsg) => void = () => {};
   onClose: (r: string) => void = () => {};
   readonly session: HostSession;
-  constructor(code = 'SOLO', opts: { allowDebugStart?: boolean; seed?: number } = {}) {
-    this.session = new HostSession({ code, send: (_p, m) => this.onMessage(m), snapshotEvery: 1, allowDebugStart: opts.allowDebugStart, seed: opts.seed, timeoutMs: 1e12 });
+  constructor(code = 'SOLO', opts: { allowDebugStart?: boolean; seed?: number; training?: boolean } = {}) {
+    this.session = new HostSession({ code, send: (_p, m) => this.onMessage(m), snapshotEvery: 1, allowDebugStart: opts.allowDebugStart, seed: opts.seed, timeoutMs: 1e12, training: opts.training });
   }
   send(m: ClientMsg): void { this.session.onMessage(LOCAL, m); }
   tick(): void { this.session.tick(); }

@@ -17,7 +17,7 @@ Runs in the browser; built with TypeScript, Vite, Canvas 2D and a deterministic
 npm install
 npm run dev          # http://localhost:5173
 npm run server       # optional dedicated WebSocket server (PORT=8799)
-npm test             # 47 simulation / flow / net tests
+npm test             # simulation, flow, net and training tests
 npm run test:e2e     # Playwright online acceptance tests
 npm run verify:live  # redirect + edge cache + live fighter select on the deployed build
 npm run build        # sprites + fonts + typecheck + production bundle
@@ -66,6 +66,13 @@ Cloudflare; the exact records, rule expressions and verification steps are in
   Turkish man and woman, the hijab woman, the Tampa man, the Latina woman and the
   elderly woman) crossing in both directions with their own stride speed. They never
   collide, never fight and are never simulated: pure ambience, like River City Ransom.
+- **Training room** — pick a fighter on the select screen, then **TRAINING**. The
+  Dragon's Den Gym is one painted room with no waves, traffic or exit, and a
+  spring-based dummy that takes hits, grapples and throws. It is refilled and put back
+  on its mark after every knockdown, so the clinch (GRAB, then SLAP and THROW) can be
+  repeated without reloading. The room uses the same grab prompt as the campaign and a
+  two-line lesson stays on screen; the stage strip and the dummy are both imported from
+  their own source art.
 - **Four concept bosses** — Dumpster Duke, Bıyıklı Fehmi, the Dondurma Man and the
   Tampa Man — with phases, telegraphs, summons and purses.
 - **Bitmap typography** — TITLE and HUD fonts generated from the approved lettering
@@ -159,7 +166,9 @@ sizes the atlas cell to the widest and tallest pose, and splices the hand-drawn
 four-frame walk strips in at the same scale as that page's walk row. Item icons, the
 golf cart and the HUD portraits are imported the same way by `tools/art/import_props.py`.
 
-Traffic and townsfolk are imported sheets too. `npm run hazards` cuts the four-frame
+The training dummy is its own four-pose page; `npm run dummy` cuts it on the common
+baseline, sizes it to fighter height and writes a small atlas with hurt, knockdown and
+throw poses. Traffic and townsfolk are imported sheets too. `npm run hazards` cuts the four-frame
 taxi / tram / motorbike / delivery-bike strips to their own height next to the fighter,
 drops any page colour left inside the art (the white gaps between a bike's tubes and its
 rider), and writes `public/assets/props/<kind>.png|json`; `HAZARD_SIZE` in `src/client/render/art.ts`

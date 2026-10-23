@@ -1,7 +1,7 @@
 // Draws a View (decoded, interpolated snapshot) into the 384x216 game canvas.
 
 import { SCREEN_H, SCREEN_W, STREET_TOP, MAX_LIVES, BAG_SLOTS } from '../../shared/data/constants';
-import { CHAPTERS, ShopSpot } from '../../shared/data/stages';
+import { CHAPTERS, ShopSpot, sectionAt } from '../../shared/data/stages';
 import { ENEMIES } from '../../shared/data/enemies';
 import { FIGHTERS, type FighterId } from '../../shared/data/fighters';
 import { ATTACKS } from '../../shared/data/attacks';
@@ -56,9 +56,9 @@ export class Renderer {
   private stageMirror = false;
 
   private ensureBg(v: View): void {
-    const key = `${v.chapter}.${v.section}`;
+    const key = `${v.chapter}.${v.section}.${v.training ? 'training' : 'story'}`;
     if (key === this.bgKey) return;
-    const sec = CHAPTERS[v.chapter].sections[v.section];
+    const sec = sectionAt(v.chapter, v.section, v.training);
     this.bg = buildBackground(sec.theme, sec, 1000 + v.chapter * 10 + v.section);
     this.stage = stageFor(sec.theme);
     this.stageStyle = shopStyleFor(sec.theme);
@@ -131,7 +131,7 @@ export class Renderer {
     // A shop you can walk into has to say so from across the street: a gold tag with the city's
     // coin, a chevron bobbing down at the doorway and a lit threshold on the pavement.
     if (v.phase === 'play' || v.phase === 'intro' || v.phase === 'clear') {
-      const sec = CHAPTERS[v.chapter].sections[v.section];
+      const sec = sectionAt(v.chapter, v.section, v.training);
       for (const s of sec.shops) {
         const x = sx(s.x);
         if (x < -60 || x > SCREEN_W + 60) continue;
@@ -211,7 +211,7 @@ export class Renderer {
     // prompts for the local player (shop door / food)
     const me = this.localEnt(v);
     if (me && v.phase === 'play' && v.lockX === null && me.st !== 'shop') {
-      const sec = CHAPTERS[v.chapter].sections[v.section];
+      const sec = sectionAt(v.chapter, v.section, v.training);
       for (const s of sec.shops) if (Math.abs(me.x - s.x) < 24 && me.z < 16) this.prompt(sx(s.x), STREET_TOP - 44, 'GRAB: ENTER ' + SHOPS[s.shop].name.toUpperCase());
     }
     if (me && (me.st === 'idle' || me.st === 'walk')) {
@@ -306,6 +306,10 @@ export class Renderer {
       c.save(); c.translate(dx + cw, dy); c.scale(-1, 1); c.drawImage(sheet.white, col * cw, row * ch, cw, ch, 0, 0, cw, ch); c.restore();
     } else c.drawImage(src, col * cw, row * ch, cw, ch, dx, dy, cw, ch);
     const headY = y - (e.flags & 4 ? 86 : 66);
+    // the practice dummy wears its name so the room never reads as a bugged enemy
+    if (!e.player && e.def === 'dummy' && e.st !== 'down' && e.st !== 'thrown' && e.st !== 'held') {
+      drawText(c, t('DUMMY'), x, headY - 2, '#f6e8b8', { align: 'center', outline: true });
+    }
     // telegraph: flashing warning over specials
     if (e.st === 'attack' && e.atk) {
       const a = ATTACKS[e.atk];
@@ -451,7 +455,7 @@ export class Renderer {
     const c = this.ctx;
     const me = this.localEnt(v);
     if (!me) return;
-    const sec = CHAPTERS[v.chapter].sections[v.section];
+    const sec = sectionAt(v.chapter, v.section, v.training);
     const spot = sec.shops.find((s) => Math.abs(me.x - s.x) < 24) ?? sec.shops[0];
     const shop = SHOPS[spot?.shop ?? 'bodega'];
     const p = v.players.find((x) => x.id === me.id) ?? v.players[0];
@@ -588,6 +592,15 @@ export class Renderer {
       let ly = y + 6;
       lines.forEach(([t, col, sc], i) => { drawText(c, t, SCREEN_W / 2, ly, col, { align: 'center', outline: true, scale: sc ?? 1 }); ly += heights[i]; });
     };
+    if (v.training) {
+      if (v.phase === 'intro' && v.phaseT < 120) {
+        banner([[t('TRAINING ROOM'), '#f0c818', 2], [t("DRAGON'S DEN GYM"), '#ffffff'], [t('GRAB - SLAP - THROW'), '#8ac8ff']], 0.82);
+      }
+      // the room's whole lesson, kept on screen after the opening card fades
+      drawText(c, t('GRAB - SLAP - THROW'), SCREEN_W / 2, SCREEN_H - 17, '#f6e8b8', { align: 'center', outline: true });
+      drawText(c, t('DUMMY RESETS WHEN KNOCKED DOWN'), SCREEN_W / 2, SCREEN_H - 8, '#8ac8ff', { align: 'center', outline: true });
+      return;
+    }
     switch (v.phase) {
       case 'intro':
         if (v.phaseT < 110) banner(v.section === 0 ? [[t(ch.title).toUpperCase(), '#f0c818'], [`${t(ch.city).toUpperCase()}, ${t(ch.country).toUpperCase()}`, '#ffffff'], [t(sec.name).toUpperCase(), '#8ac8ff']] : [[t(sec.name).toUpperCase(), '#f0c818', 2]]);

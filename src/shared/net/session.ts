@@ -34,6 +34,8 @@ export interface SessionOptions {
   now?: () => number;
   timeoutMs?: number;
   godMode?: boolean;
+  /** Local practice mode: start the training room instead of a story section. */
+  training?: boolean;
 }
 
 export class HostSession {
@@ -165,7 +167,7 @@ export class HostSession {
   }
 
   startGame(ch = 0, se = 0): void {
-    this.sim = new Sim({ seed: this.opts.seed ?? (this.now() & 0x7fffffff), chapter: ch, section: se, godMode: this.opts.godMode });
+    this.sim = new Sim({ seed: this.opts.seed ?? (this.now() & 0x7fffffff), chapter: ch, section: se, godMode: this.opts.godMode, training: this.opts.training });
     for (const p of this.peers.values()) if (p.connected) this.sim.addPlayer(p.id, p.fighter, p.name);
     this.sim.start();
     this.broadcast({ t: 'start', ch, se });

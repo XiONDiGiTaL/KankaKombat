@@ -24,6 +24,8 @@ export interface EnemyDef {
   slowGetup?: boolean;
   /** Bıyıklı Fehmi always stops for a sip before setting off again. */
   sip?: boolean;
+  /** The training-room dummy: no AI, no reward and never removed. */
+  dummy?: boolean;
   quips?: string[];
   boss?: { title: string; phases: BossPhase[]; tired: number; intro: string; defeat: string };
 }
@@ -31,6 +33,16 @@ export interface EnemyDef {
 const atk = (id: string, w: number, min: number, max: number): EnemyAttack => ({ id, w, min, max });
 
 export const ENEMIES: Record<string, EnemyDef> = {
+  // ------------------------------------------------------------- Training room
+  // A sand-filled dummy on a spring base. It is an enemy only so the existing hit, grab
+  // and throw code treats it like one; the simulation skips its AI, refills its health
+  // every tick and sets it back on its stand after a knockdown.
+  dummy: {
+    id: 'dummy', name: 'TRAINING DUMMY', sheet: 'dummy', maxHp: 9999, walk: 0, walkZ: 0,
+    attacks: [], aggression: 0, block: 0, dodge: 0, poise: 0, reward: [0, 0], food: 0, xp: 0, weight: 1,
+    dummy: true,
+  },
+
   // ------------------------------------------------------------- New York
   bum: {
     id: 'bum', name: 'NYC BUM', sheet: 'bum', maxHp: 52, walk: 1.05, walkZ: 0.75,

@@ -63,6 +63,16 @@ _Updated 2026-10-22._
   quotes the reach with the hold and slap count. The client tags an enemy in reach with a
   steady GRAB prompt, and the held victim with THROW, using `grabReadiness.ts` so the tag
   follows the same range, lane and state rules as `tryGrab`.
+- **Training room** — the select screen now offers TRAINING next to FIGHT! for any
+  chosen fighter. It loads `TRAINING` from `src/shared/data/stages.ts` (a flag the story
+  chapters do not use) into the painted Dragon's Den Gym strip, with no waves, hazards,
+  shops or exit. A `dummy` enemy is the only occupant: the sim skips its AI, refills its
+  health every tick and skips its reward, and after a knockdown it gets up and snaps
+  back to its mark, ready for another clinch. The normal GRAB / THROW prompts work in
+  the room, and a two-line on-screen lesson (`GRAB - SLAP - THROW`, `DUMMY RESETS WHEN
+  KNOCKED DOWN`) stays up in English and Turkish. The dummy is a four-pose imported
+  atlas (`npm run dummy`), and the gym is imported by `npm run stages`; the training
+  flag travels in the snapshot (`tr`) so the client draws the gym and not New York.
 - **Hand-drawn walk strips replace every walk and run row** (`assets/source/walk/*.png`,
   four frames each, spliced in by the same importer). Each strip is cut as four blobs,
   scaled so the walker stands exactly as tall as the same figure on his page (measured
@@ -322,6 +332,9 @@ _Updated 2026-10-22._
   screen (`/assets/music/title.mp3`, 142s) and each city theme on its chapter, including
   the boss arena where the İzmir theme kept playing instead of switching.
 - Review sheet for every frontage and booth: [stage-dressing.png](docs/screenshots/stage-dressing.png).
+- The training room in the running build: Aynur in the Dragon's Den Gym, the dummy at
+  its mark, the GRAB / THROW prompts over it, the five-slap knockdown and the dummy
+  standing back up at home.
 - The deployed build on xiondigital.net/kankakombat running the new controls: the main menu
   ([menu](docs/screenshots/live-menu.png)), Flatbush Avenue with the imported strip
   ([street](docs/screenshots/live-flatbush.png)) and pause opened with Start

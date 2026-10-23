@@ -31,7 +31,7 @@ export interface ViewProp { id: number; kind: string; x: number; z: number; hp: 
 export interface ViewProj { id: number; kind: string; x: number; y: number; z: number }
 export interface ViewHazard { kind: string; state: number; x: number; dir: number; z0: number; z1: number }
 export interface View {
-  tick: number; phase: GamePhase; phaseT: number; chapter: number; section: number;
+  tick: number; phase: GamePhase; phaseT: number; chapter: number; section: number; training: boolean;
   camX: number; lockX: number | null; camMax: number; cur: Currency; bossId: number; continueT: number;
   ents: ViewEnt[]; players: ViewPlayer[]; pickups: ViewPickup[]; props: ViewProp[]; projs: ViewProj[]; hazards: ViewHazard[];
   events: SimEvent[];
@@ -39,7 +39,7 @@ export interface View {
 
 /** Wire format: arrays of numbers plus a small header. */
 export interface Snap {
-  k: number; ph: number; pt: number; ch: number; se: number; cx: number; lk: number; cm: number; cu: 0 | 1; b: number; ct: number;
+  k: number; ph: number; pt: number; ch: number; se: number; tr: 0 | 1; cx: number; lk: number; cm: number; cu: 0 | 1; b: number; ct: number;
   e: number[][];
   p: (string | number)[][];
   pk: number[][]; pr: number[][]; pj: number[][]; hz: number[][];
@@ -50,7 +50,7 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 
 export function encode(sim: Sim, events: SimEvent[]): Snap {
   return {
-    k: sim.tick, ph: PHASES.indexOf(sim.phase), pt: sim.phaseT, ch: sim.chapter, se: sim.section,
+    k: sim.tick, ph: PHASES.indexOf(sim.phase), pt: sim.phaseT, ch: sim.chapter, se: sim.section, tr: sim.training ? 1 : 0,
     cx: r1(sim.camX), lk: sim.lockX ?? -1, cm: sim.camMax, cu: sim.currency === 'TRY' ? 0 : 1, b: sim.bossId, ct: sim.continueT,
     e: sim.ents.filter((e) => !e.removed).map((e) => [
       e.id, DEFS.indexOf(e.def), r1(e.x), r1(e.y), r1(e.z), e.face, STATES.indexOf(e.st), e.t, Math.max(0, Math.ceil(e.hp)), e.maxHp,
@@ -69,7 +69,7 @@ export function encode(sim: Sim, events: SimEvent[]): Snap {
 
 export function decode(s: Snap): View {
   return {
-    tick: s.k, phase: PHASES[s.ph] ?? 'play', phaseT: s.pt, chapter: s.ch, section: s.se, camX: s.cx, lockX: s.lk < 0 ? null : s.lk, camMax: s.cm,
+    tick: s.k, phase: PHASES[s.ph] ?? 'play', phaseT: s.pt, chapter: s.ch, section: s.se, training: s.tr === 1, camX: s.cx, lockX: s.lk < 0 ? null : s.lk, camMax: s.cm,
     cur: s.cu ? 'USD' : 'TRY', bossId: s.b, continueT: s.ct,
     ents: s.e.map((a) => ({
       id: a[0], def: DEFS[a[1]], x: a[2], y: a[3], z: a[4], face: (a[5] === -1 ? -1 : 1) as 1 | -1, st: STATES[a[6]] ?? 'idle', t: a[7], hp: a[8], maxHp: a[9],

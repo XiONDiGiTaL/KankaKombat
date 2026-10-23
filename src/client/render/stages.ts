@@ -47,6 +47,7 @@ export const STAGE_FOR: Record<string, string> = {
   ist_galata: 'bosphorus',
   tpa_boardwalk: 'tampa',
   tpa_plaza: 'tampa',
+  gym: 'gym',
 };
 
 const stages = new Map<string, StageArt>();
