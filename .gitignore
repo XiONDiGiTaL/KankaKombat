@@ -8,6 +8,7 @@ dist/
 *.rom
 .env
 .env.*
+.cloudflare-token
 !.env.example
 test-results/
 playwright-report/
