@@ -98,7 +98,7 @@ export class Fx {
   drawBubble(ctx: CanvasRenderingContext2D, id: number, sx: number, sy: number): void {
     const b = this.bubbles.find((x) => x.id === id);
     if (!b) return;
-    const words = b.text.toUpperCase().split(' ');
+    const words = b.text.split(' ');
     const lines: string[] = []; let cur = '';
     for (const w of words) { if ((cur + ' ' + w).trim().length > 18) { lines.push(cur.trim()); cur = w; } else cur += ' ' + w; }
     if (cur.trim()) lines.push(cur.trim());

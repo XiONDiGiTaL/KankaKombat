@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <title>Kanka Kombat: Nutella Nights</title>
-  <meta name="description" content="An online co-op pixel-art beat-'em-up. Brawl through İstanbul, İzmir, New York and Tampa as B.T. and S.C. — in your browser, no download." />
+  <meta name="description" content="An online co-op pixel-art beat-'em-up. Brawl through İstanbul, İzmir, New York and Tampa as B.T., S.C., Ozzi or Aynur — in your browser, no download." />
   <meta name="theme-color" content="#1a1220" />
   <link rel="canonical" href="https://xiondigital.net/kankakombat/" />
   <meta property="og:type" content="website" />
@@ -16,7 +16,7 @@
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Kanka Kombat: Nutella Nights" />
-  <meta name="twitter:description" content="Online co-op pixel-art beat-'em-up — B.T. and S.C. across İstanbul, İzmir, New York and Tampa." />
+  <meta name="twitter:description" content="Online co-op pixel-art beat-'em-up — four fighters across İstanbul, İzmir, New York and Tampa." />
   <meta name="twitter:image" content="https://xiondigital.net/kankakombat/og.png" />
   <link rel="icon" type="image/png" href="./favicon.png" />
   <link rel="apple-touch-icon" href="./favicon.png" />
@@ -53,7 +53,12 @@
     <div id="select" class="screen">
       <div class="panel wide">
         <h2 id="select-title">CHOOSE YOUR FIGHTER</h2>
-        <div class="cards" id="cards"></div>
+        <div class="roster">
+          <button type="button" class="peek" id="peek-prev" tabindex="-1" aria-label="Previous fighter"><span class="arw">◀</span><canvas width="84" height="108"></canvas><span class="nm"></span></button>
+          <div class="cards" id="cards"></div>
+          <button type="button" class="peek" id="peek-next" tabindex="-1" aria-label="Next fighter"><span class="arw">▶</span><canvas width="84" height="108"></canvas><span class="nm"></span></button>
+        </div>
+        <div class="rail" id="rail" aria-label="Fighter roster"></div>
         <label class="row"><span data-i18n="NAME">NAME</span> <input id="name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Kanka" /></label>
         <p class="tiny name-hint" id="name-hint">Your name, shown on the HUD.</p>
         <div class="row" id="debug-start" hidden>
@@ -80,7 +85,7 @@
         <h2>ROOM <span id="room-code" class="code">-----</span></h2>
         <div class="row"><button id="copy-link">COPY INVITE LINK</button><span id="copy-ok" class="tiny"></span></div>
         <ul id="players" class="players"></ul>
-        <div class="row"><span data-i18n="FIGHTER">FIGHTER</span><button id="pick-bt" class="pick">B.T.</button><button id="pick-sc" class="pick">S.C.</button></div>
+        <div class="row" id="pick-row"><span data-i18n="FIGHTER">FIGHTER</span></div>
         <div class="row buttons">
           <button id="leave-room" class="ghost">LEAVE</button>
           <button id="ready-btn" data-primary>READY</button>
@@ -109,7 +114,7 @@
               <li data-i18n="Hit enemies enough and they get dizzy — even bosses can be grabbed while dizzy or TIRED after a big special.">Hit enemies enough and they get dizzy — even bosses can be grabbed while dizzy or TIRED after a big special.</li>
               <li data-i18n="A flashing ! means a big attack is coming: dodge, jump or get out of the way.">A flashing ! means a big attack is coming: dodge, jump or get out of the way.</li>
               <li data-i18n="Watch for the yellow lane warning: trams, taxis, bikes and golf carts hit everyone.">Watch for the yellow lane warning: trams, taxis, bikes and golf carts hit everyone.</li>
-              <li data-i18n="Secret fighters: press UP on B.T. or S.C. on the select screen. OZZI brings extra reach and the fastest sidestep; AYNUR's grab reaches farther, she holds longer and every LIGHT in her hold lands another slap.">Secret fighters: press UP on B.T. or S.C. on the select screen. OZZI brings extra reach and the fastest sidestep; AYNUR's grab reaches farther, she holds longer and every LIGHT in her hold lands another slap.</li>
+              <li data-i18n="The roster is all four fighters: LEFT and RIGHT (or the tiles either side of the card, or the name rail) cycle it. B.T. is speed, S.C. power, OZZI toughness, AYNUR the five-slap hold.">The roster is all four fighters: LEFT and RIGHT (or the tiles either side of the card, or the name rail) cycle it. B.T. is speed, S.C. power, OZZI toughness, AYNUR the five-slap hold.</li>
               <li data-i18n="Training room: pick a fighter, then TRAINING to practise grab, slap and throw timing on a dummy that sets itself back up after every knockdown.">Training room: pick a fighter, then TRAINING to practise grab, slap and throw timing on a dummy that sets itself back up after every knockdown.</li>
             </ul>
             <h3 data-i18n="FOOD &amp; MONEY">FOOD &amp; MONEY</h3>

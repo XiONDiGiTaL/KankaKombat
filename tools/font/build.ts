@@ -4,7 +4,9 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import opentype from 'opentype.js';
-import { FONT_DATA } from '../../src/client/render/font';
+import { FONT_DATA, parseGlyph } from '../../src/client/render/font';
+
+type Mark = 'cedilla' | 'breve' | 'dot' | 'umlaut' | 'acute' | 'tilde' | 'circumflex';
 
 const UPEM = 1000;
 const PX = 100;
@@ -27,13 +29,10 @@ function runRects(rows: string[]): Rect[] {
   return out;
 }
 
-function markRects(mark: 'cedilla' | 'breve' | 'dot' | 'umlaut'): Rect[] {
-  switch (mark) {
-    case 'dot': return [[1, -2, 1, 1], [2, -2, 1, 1]];
-    case 'umlaut': return [[0, -2, 1, 1], [1, -2, 1, 1], [3, -2, 1, 1], [4, -2, 1, 1]];
-    case 'breve': return [[0, -2, 1, 1], [1, -3, 2, 1], [3, -3, 1, 1], [4, -2, 1, 1]];
-    case 'cedilla': return [[1, 9, 1, 1], [2, 9, 1, 1], [1, 10, 1, 1], [0, 10, 1, 1]];
-  }
+/** The composed letters' marks, taken from the same table the canvas draws, so the webfont
+ *  and the bitmap text can never disagree. A cedilla hangs below the baseline row. */
+function markRects(mark: Mark, wide: boolean, h: number): Rect[] {
+  return FONT_DATA.marks(mark, wide).map(([x, y]) => [x, mark === 'cedilla' ? h + y : y, 1, 1] as Rect);
 }
 
 function pathFor(rects: Rect[], h: number): opentype.Path {
@@ -46,7 +45,7 @@ function pathFor(rects: Rect[], h: number): opentype.Path {
   return p;
 }
 
-function build(name: string, family: string, w: number, h: number, adv: number, glyphs: Record<string, string[] | string>): void {
+function build(name: string, family: string, kind: 'hud' | 'title', w: number, h: number, adv: number, glyphs: Record<string, string[] | string>): void {
   const all: opentype.Glyph[] = [];
   const seen = new Set<number>();
   all.push(new opentype.Glyph({ name: '.notdef', advanceWidth: adv * PX, path: new opentype.Path() }));
@@ -78,13 +77,13 @@ function build(name: string, family: string, w: number, h: number, adv: number, 
   // space
   all.push(new opentype.Glyph({ name: 'space', unicodes: claim([32]), advanceWidth: adv * PX, path: new opentype.Path() }));
 
-  // Turkish letters = base letter + mark
-  for (const [ch, t] of Object.entries(FONT_DATA.turkish)) {
-    const src = glyphs[t.base];
-    if (!src) continue;
+  // composed letters = base letter + mark (Turkish v1 set and the Spanish extension)
+  for (const ch of [...Object.keys(FONT_DATA.turkish), ...Object.keys(FONT_DATA.accents)]) {
+    const { base, mark } = parseGlyph(ch, kind);
+    const src = glyphs[base];
+    if (!src || !mark) continue;
     const rows = Array.isArray(src) ? src : Array.from({ length: h }, (_, y) => src.slice(y * w, y * w + w).replace(/0/g, '.').replace(/1/g, '#'));
-    const marks = markRects(t.mark).map(([x, y, ww, hh]) => [x, y + (t.mark === 'cedilla' ? 0 : 0), ww, hh] as Rect);
-    const path = pathFor([...runRects(rows), ...marks], h);
+    const path = pathFor([...runRects(rows), ...markRects(mark, kind === 'title', h)], h);
     const code = ch.codePointAt(0)!;
     const unicodes = claim([code, ch.toLowerCase().codePointAt(0)!]);
     if (!unicodes.length) continue;
@@ -109,5 +108,5 @@ function build(name: string, family: string, w: number, h: number, adv: number, 
   console.log(`font: ${file} (${all.length} glyphs)`);
 }
 
-build('kanka-title', 'Kanka Title', FONT_DATA.title.w, FONT_DATA.title.h, FONT_DATA.title.adv, FONT_DATA.title.glyphs);
-build('kanka-hud', 'Kanka HUD', FONT_DATA.hud.w, FONT_DATA.hud.h, FONT_DATA.hud.adv, FONT_DATA.hud.glyphs);
+build('kanka-title', 'Kanka Title', 'title', FONT_DATA.title.w, FONT_DATA.title.h, FONT_DATA.title.adv, FONT_DATA.title.glyphs);
+build('kanka-hud', 'Kanka HUD', 'hud', FONT_DATA.hud.w, FONT_DATA.hud.h, FONT_DATA.hud.adv, FONT_DATA.hud.glyphs);

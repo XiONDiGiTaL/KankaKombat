@@ -19,6 +19,7 @@
     "npcs": "python tools/art/import_npcs.py",
     "stages": "python tools/art/import_stages.py",
     "dummy": "python tools/art/import_dummy.py",
+    "shop": "python tools/art/import_shop.py",
     "web-assets": "python tools/art/make_web_assets.py",
     "fonts": "tsx tools/font/build.ts",
     "test": "vitest run",

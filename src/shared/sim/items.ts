@@ -6,7 +6,7 @@
 // - Purchases need the shop's stock, enough money and a free bag slot.
 
 import { BAG_SLOTS } from '../data/constants';
-import { ITEMS, ITEM_IDS, ItemId } from '../data/items';
+import { DROP_IDS, ITEMS, ItemId } from '../data/items';
 import { SHOPS } from '../data/shops';
 import type { Sim } from './sim';
 import { Ent, Prop } from './types';
@@ -17,7 +17,7 @@ export function spawnCoin(sim: Sim, amount: number, x: number, z: number): void 
 }
 
 export function spawnFood(sim: Sim, item: ItemId | null, x: number, z: number, vy: number): void {
-  const it = item ?? sim.rng.weighted(ITEM_IDS.map((id) => ({ w: ITEMS[id].dropWeight, v: id })));
+  const it = item ?? sim.rng.weighted(DROP_IDS.map((id) => ({ w: ITEMS[id].dropWeight, v: id })));
   sim.pickups.push({ id: sim.nextId++, kind: 'food', item: it, amount: 0, x, y: vy > 0 ? 2 : 0, z, vy, ttl: 60 * 25, taken: false });
 }
 

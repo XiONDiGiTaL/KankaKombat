@@ -1,6 +1,7 @@
 // Bilingual UI (English / Türkçe). DOM screens carry data-i18n / data-i18n-html
 // attributes; the canvas renderer calls t() directly. Choice persists in settings.
 
+import { setFontLocale } from './render/font';
 import { loadSettings, saveSettings } from './settings';
 
 export type Lang = 'en' | 'tr';
@@ -81,7 +82,18 @@ export const TR: Record<string, string> = {
   'Design, code, pixel art & chiptunes generated for XiØN / XiONDiGiTaL. All characters, sprites, music and sound are original to this game. Fonts built from the game’s own lettering sheet. Nutella is a trademark of Ferrero; it appears here only as a food item. No affiliation.': 'Tasarım, kod, piksel sanat ve chiptune’lar XiØN / XiONDiGiTaL için üretildi. Tüm karakterler, sprite’lar, müzik ve sesler bu oyuna özgüdür. Yazı tipleri oyunun kendi harf sayfasından üretildi. Nutella, Ferrero’nun ticari markasıdır; burada yalnızca yiyecek olarak geçer. Bağlantı yoktur.',
   // ---- item names / descriptions
   'Ayran': 'Ayran', 'Bananas': 'Muz', 'Lahmacun': 'Lahmacun', 'Baklava': 'Baklava', 'Sucuk': 'Sucuk', 'Nutella': 'Nutella',
-  'Small heal.': 'Küçük iyileşme.', 'Medium heal.': 'Orta iyileşme.', 'Large heal.': 'Büyük iyileşme.', 'Full restore. Rare.': 'Tam iyileşme. Nadir.',
+  // shop meals: what each city's shops actually sell
+  'Tortillas': 'Tortilla', 'Taco': 'Tako', 'Quesadilla': 'Quesadilla', 'Elote': 'Elote',
+  'Burrito': 'Burrito', 'Pastor Plate': 'Pastor Tabağı',
+  'Bagel': 'Bagel', 'Plantain Chips': 'Muz Cipsi', 'Beef Patty': 'Kıymalı Çörek', 'Knish': 'Knish',
+  'Chopped Cheese': 'Kıymalı Sandviç', 'Bronx Hero': 'Bronx Sandviç',
+  'Çay': 'Çay', 'Simit': 'Simit', 'Börek': 'Börek', 'Lokum': 'Lokum', 'Dondurma': 'Dondurma',
+  'Karışık Pide': 'Karışık Pide',
+  'Turşu Suyu': 'Turşu Suyu', 'Kestane': 'Kestane', 'Mısır': 'Mısır', 'Midye Dolma': 'Midye Dolma',
+  'Nar Suyu': 'Nar Suyu', 'Balık Ekmek': 'Balık Ekmek',
+  'Small heal.': 'Küçük iyileşme.', 'Medium heal.': 'Orta iyileşme.', 'Large heal.': 'Büyük iyileşme.',
+  'Full restore.': 'Tam iyileşme.', 'Full restore. Rare.': 'Tam iyileşme. Nadir.',
+  'SHOP MEALS (SOLD BY CITY VENDORS)': 'DÜKKÂN YEMEKLERİ (ŞEHİR SATICILARI)',
   'FULL HP': 'TAM CAN', 'BAG': 'ÇANTA', 'WALLET': 'CÜZDAN',
   // ---- stage names
   'Chapter 1: Concrete Jungle': 'Bölüm 1: Beton Ormanı',
@@ -115,15 +127,15 @@ export const TR: Record<string, string> = {
   'PAZAR': 'PAZAR', 'ÇAY STAND': 'ÇAY TEZGÂHI', 'TACOS': 'TACOS', 'TACO TRUCK': 'TACO KAMYONU',
   'OPEN 24/7 · COLD DRINKS': '7/24 AÇIK · SOĞUK İÇECEK', 'SABRETT · DIRTY WATER · ICE COLD': 'SABRETT · KAYNAK SUYU · BUZ GİBİ',
   'BAKKAL · ŞARKÜTERİ · 7/24': 'BAKKAL · ŞARKÜTERİ · 7/24', 'TAZE SİMİT · AÇIK HAVA': 'TAZE SİMİT · AÇIK HAVA',
-  'BAHARAT · BAKLİYAT · ÇAY': 'BAHARAT · BAKLİYAT · ÇAY', 'DEMLİ ÇAY · SICAK SİMİT': 'DEMLİ ÇAY · SICAK SİMİT',
+  'KESTANE · MISIR · TURŞU': 'KESTANE · MISIR · TURŞU', 'DEMLİ ÇAY · SICAK SİMİT': 'DEMLİ ÇAY · SICAK SİMİT',
   'TACOS · LIMON · PLAYA': 'TACOS · LİMON · PLAYA', 'TACOS – LIMON · ABIERTO': 'TACOS · LİMON · AÇIK',
-  'WELCOME! WHAT’LL IT BE?': 'HOŞ GELDİN! NE ALALIM?', 'Hey! Best cart on the block.': 'Hey! Mahallenin en iyi arabası.',
-  'Hoş geldin kanka! Ne alalım?': 'Hoş geldin kanka! Ne alalım?', 'Simit mi, ayran mı?': 'Simit mi, ayran mı?',
-  'Bir çay içmeden olmaz, buyur.': 'Bir çay içmeden olmaz, buyur.', 'Çayı demledim, ne alırsın?': 'Çayı demledim, ne alırsın?',
-  'Fresh tortillas, kanka!': 'Taze tortillalar, kanka!', 'What can I get you, amigo?': 'Ne alırsın, amigo?',
+  "What's good, papi? Chopped cheese is hot.": 'Ne var ne yok papi? Sıcak chopped cheese.',
+  'Bagel and chips, baby? Mind the doors.': 'Bagel ve cips, canım? Kapıya dikkat.',
+  "Best cart on the block, buddy. Knish's warm.": 'Mahallenin en iyi arabası, dostum. Knish sıcak.',
+  'Fresh tortillas, amigo!': 'Taze tortillalar, amigo!',
+  'Tacos, carnal? Elote is off the grill.': 'Tako ister misin, carnal? Elote ızgaradan yeni çıktı.',
   'NEWSSTAND': 'GAZETE BÜFE', 'PAPERS · CANDY · METROCARD': 'GAZETE · ŞEKER · METROKART',
-  'Mind the doors, kanka. What do you need?': 'Kapılara dikkat kanka. Ne lazım?', 'Dee': 'Dee',
-  'Manny': 'Manny', 'Sal': 'Sal', 'Nazmiye': 'Nazmiye', 'Hasan': 'Hasan', 'Fehmi': 'Fehmi', 'Ayşe': 'Ayşe', 'Lupe': 'Lupe', 'Rico': 'Rico',
+  'Dee': 'Dee', 'Marcos': 'Marcos', 'Sal': 'Sal', 'Hüsnü': 'Hüsnü', 'Hasan': 'Hasan', 'Sabri': 'Sabri', 'Ayşe': 'Ayşe', 'Lupe': 'Lupe', 'Rico': 'Rico',
   // ---- in-game messages / overlays
   'WARNING!': 'DİKKAT!', 'SECTION CLEAR!': 'KISIM TEMİZ!', 'K.O.!': 'K.O.!', 'GAME OVER': 'OYUN BİTTİ',
   'CONTINUE?': 'DEVAM?', 'PRESS START (ENTER) — MONEY IS HALVED': 'START (ENTER) — PARA YARILANIR',
@@ -143,9 +155,7 @@ export const TR: Record<string, string> = {
   'Power & grapples. Launching uppercut, armored haymaker, huge throws.': 'Güç ve tutuşlar. Havaya kaldıran aparkat, zırhlı kroşe, dev fırlatmalar.',
   'Brick wall. Long reach, three-hit chains, the fastest sidestep in the game.': 'Yürüyen duvar. Uzun erim, üç vuruşluk zincirler, oyunun en hızlı yana atılması.',
   'Grapple queen. Locks you in place, then lands a five-slap combo.': 'Tutuş kraliçesi. Seni yerine kilitler, sonra beş tokatlık kombo indirir.',
-  'SECRET': 'GİZLİ',
-  'PRESS UP FOR A SECRET FIGHTER': 'GİZLİ DÖVÜŞÇÜ İÇİN YUKARI BAS',
-  'Secret fighters: press UP on B.T. or S.C. on the select screen. OZZI brings extra reach and the fastest sidestep; AYNUR\'s grab reaches farther, she holds longer and every LIGHT in her hold lands another slap.': 'Gizli dövüşçüler: dövüşçü seçme ekranında B.T. veya S.C. üzerinde YUKARI bas. OZZI ekstra erim ve en hızlı yana atılma getirir; AYNUR\'un tutuşu daha uzağa erişir, daha uzun tutar ve tutuşunda her HAFİF bir tokat daha indirir.',
+  'The roster is all four fighters: LEFT and RIGHT (or the tiles either side of the card, or the name rail) cycle it. B.T. is speed, S.C. power, OZZI toughness, AYNUR the five-slap hold.': 'Kadroda dört dövüşçünün hepsi var: SOL ve SAĞ (ya da kartın iki yanındaki kutular, ya da isim şeridi) aralarında geçiş yapar. B.T. hız, S.C. güç, OZZI dayanıklılık, AYNUR beş tokatlık tutuş.',
   'POWER': 'GÜÇ', 'SPEED': 'HIZ', 'GRAPPLE': 'TUTUŞ', 'TOUGHNESS': 'DAYANIKLILIK',
   // ---- fighter select stat tooltips
   'How hard your strikes land, and how much a throw hurts.': 'Vuruşlarının ne kadar sert indiği ve fırlatmanın ne kadar acıttığı.',
@@ -179,6 +189,7 @@ export function getLang(): Lang { return lang; }
 
 export function applyLang(next: Lang): void {
   lang = next;
+  setFontLocale(next);
   saveSettings({ lang: next });
   document.documentElement.lang = next === 'tr' ? 'tr' : 'en';
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n!); });

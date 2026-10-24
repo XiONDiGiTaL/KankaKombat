@@ -1,14 +1,14 @@
 # KANKA KOMBAT — PROGRESS
 
-_Updated 2026-10-22._
+_Updated 2026-10-23._
 
 ## IMPLEMENTED
 
 - Deterministic 60 Hz simulation, rollback-friendly snapshots, combo/grab/throw/juggle
   systems, dodge i-frames, armour, stun, boss phases and purses.
-- Two starter heroes (B.T. / S.C.) and two secret fighters (Ozzi / Aynur, revealed
-  with UP on a fighter card), four chapters (NYC, İzmir, İstanbul, Tampa),
-  sixteen sections, four bosses, hazards, waves, camera locks and GO gating. MUSE is a
+- Four fighters on one cyclable select card (B.T. / S.C. / Ozzi / Aynur),
+  four chapters (NYC, İzmir, İstanbul, Tampa),
+  seventeen sections, four bosses, hazards, waves, camera locks and GO gating. MUSE is a
   reference sheet only as a fighter; she only appears as a pedestrian. Each chapter is
   now street → peaceful plaza → street → boss arena, so the campaign breathes instead
   of running four fights back to back on one loop of music.
@@ -29,10 +29,11 @@ _Updated 2026-10-22._
   tallest pose so nothing clips. The HUD head box is measured from the
   idle silhouette instead of hard-coded. `tools/sprites/build.ts` skips characters
   listed in `tools/sprites/imported.json`, so the procedural pass never overwrites them.
-- **Two hidden fighters, revealed from the fighter cards** — Ozzi hides behind S.C. and
-  Aynur behind B.T.; UP on a highlighted card swaps its sprite, name, blurb and stat
-  sheet for the secret, and the card keeps the reveal for the session until it is
-  confirmed. The four fighters each own exactly one maxed stat, so no two read as the
+- **The whole roster on one cyclable fighter card** — the select screen holds one hero card
+  flanked by the previous and next fighter, with a four-tab name rail under it. LEFT/RIGHT,
+  the peek tiles or a rail tab step the card, and the fighter it shows is the pick FIGHT!
+  starts with, so no selection or saved pick can be stranded behind a one-way reveal. The
+  four fighters each own exactly one maxed stat, so no two read as the
   same character: B.T. speed 5, S.C. power 5, Ozzi toughness 5, Aynur grapple 5, with
   the rest of each bar balanced around its role. Ozzi is the tank — 120 HP, 1.22 damage
   divisor (146 effective HP, just past S.C.'s 144), power 3, speed 4, a long-reach three-hit
@@ -237,10 +238,11 @@ _Updated 2026-10-22._
   `xiondigital.github.io` repo that carries `?room=` codes through to the live game.
   Turning that into a real edge `301` (plus asset caching) needs the domain proxied
   through Cloudflare; the runbook is [docs/cloudflare.md](docs/cloudflare.md).
-- Fighter select: one grid per stat block, so both heroes' bars share the same labels,
-  the same track width and a segmented empty track. The cards show the in-game sprite on a
-  dusk backdrop, sized from its own opaque bounds: both cards use one whole-pixel scale and
-  one floor line, so the two stand at matching size and nothing is cropped.
+- Fighter select: one grid per stat block, so every fighter's bars share the same labels,
+  the same track width and a segmented empty track. The hero card shows the in-game sprite
+  on a dusk backdrop, sized from its own opaque bounds by the largest whole-pixel multiple
+  that fits, standing on the card's floor line; the peek tiles either side paint the same
+  fighter smaller, so the card reads as the middle of a row instead of a lone page.
 - Every stat bar is a hover / focus / tap target with a tooltip that says what it changes
   in play, quoting the fighter's own numbers from the data it reads: heavy damage and
   throw, run and walk pace, hold in seconds and slap count, health and the share of each
@@ -262,8 +264,9 @@ _Updated 2026-10-22._
 - Title lettering carries the reference's two-tone gold (lit top rows, shaded base).
   Signage passes `flatTitle` so a sign stays one solid colour on its board.
 - `npm run verify:live` checks the deployed build in one pass: the legacy `/KankaKombat/`
-  redirect, the asset cache headers at the edge, and the live fighter select (both cards
-  rendered, no console errors, no failed requests). It exits non-zero on a missing proxy
+  redirect, the asset cache headers at the edge, and the live fighter select (hero card and
+  both peeks painted, four rail tabs with one current, a step right changes the fighter, no
+  console errors, no failed requests). It exits non-zero on a missing proxy
   or rule, so the Cloudflare runbook has a single machine-checkable gate.
 - Supplied soundtrack wired in: `title.mp3` on every out-of-game screen and one city
   theme per chapter, cross-faded through the Web Audio graph and resumed where the track
@@ -277,6 +280,10 @@ _Updated 2026-10-22._
   and short enough not to loop it. `tests/flow.test.ts` drives two bots through the real
   input path and fails if a chapter ends more than 15s before its theme or runs past a
   playthrough plus a minute.
+- Fighter select is a carousel now: [roster card](docs/screenshots/select-roster.png) with
+  its neighbours peeking in, the four-tab name rail, and a stat row explaining itself
+  ([tooltip](docs/screenshots/select-stat-tooltip.png)); the same screen in
+  [Turkish](docs/screenshots/select-roster-tr.png), long labels and all.
 - The name field is this player's own tag, not a room title, and the screen now says so
   in both languages.
 
@@ -340,12 +347,74 @@ _Updated 2026-10-22._
   ([street](docs/screenshots/live-flatbush.png)) and pause opened with Start
   ([pause](docs/screenshots/live-pause.png)), with RESUME focused and ready for A/Z.
 
+- **Two food economies that never overlap** — the six street drops keep their locked
+  weights; the nine shops sell 24 shop-only meals, each the food of its own place: Lupe's
+  tortillas, taco, quesadilla, elote, burrito and $150 pastor plate; Marcos' bagel,
+  plantain chips, beef patty, knish, chopped cheese and $150 Bronx hero; Hüsnü's çay,
+  simit, börek, lokum, dondurma and $150 karışık pide; the pazar booth's turşu suyu,
+  kestane, mısır, midye dolma, nar suyu and balık ekmek. Shop meals never drop, heal above
+  the street ladder, the three sit-down shops hold the only FULL restores and the booths
+  stay below 150, six rows to a menu. The 24 supplied icons are cut into the shared 18px
+  atlas, and Hüsnü's bakkal is the second painted room; Marcos' bodega and Kemal's pazar
+  cart on the İstanbul waterfront came after it. Every keeper talks in their own register — Marcos' papi,
+  Dee's baby, Sal's buddy, kanka and canım at the Turkish counters, Lupe's amigo, Rico's
+  carnal. Brief and stock tables: [docs/shops.md](docs/shops.md).
+
+- **Lupe's wall reads like a live menu** — the imported taco room repaints the painting's
+  small chalkboard (`tools/art/import_shop.py`): at 384 px its slate was 24 px across, less
+  than five letters of the HUD font, so the chalk was unreadable scribble however it was
+  drawn. The room now ships a framed, blank slate wide enough for a dish and a price side
+  by side (`board: [183, 31, 64, 44]` in `tacos.json`), and `chalkLayout()` in
+  `src/client/render/shops.ts` writes it from the shop's own stock: the first rows in menu
+  order whose short name and price fit, as many lines as the slate holds — `TACO 40`,
+  `ELOTE 70`, `BURRITO 90` today, with the amounts in the wallet's numbers and no typed-in
+  dish to drift from the menu below. The words are real HUD glyphs at 1:1 (spelled, folded,
+  never painted letterforms), the board sits under her two-line bubble with its bottom above
+  the bar, and the old painting's wire is taken out at source resolution rather than painted
+  back over the shelf crown. `tests/shopArt.test.ts` keeps every row inside the slate,
+  matches every price to the counter's, and proves a one-dish stock draws one row; the shop
+  e2e counts the chalked pixels and fails on any `[font]` warning.
+  Counter: [screenshot](docs/screenshots/shop-lupe-board.png).
+
+- **Spanish and inverted glyphs in the game's own fonts** — the 24 extension glyphs are
+  registered append-only (title 57–64, HUD 36–51) on top of the untouched v1 tables:
+  Á É Í Ó Ú Ñ compose from the v1 base letters plus the sheet's acute/tilde, ¡ and ¿
+  are ordinary dot-on-top glyphs, and the HUD keeps its Turkish set. The em dash, en dash
+  and curly apostrophe the v1 sheet never had were appended after them (title 65–67, HUD
+  52–54), so the chapter-clear banner and the Turkish story lines no longer fall back to
+  `?`. The text layer now folds case per locale (Turkish `i→İ`, `ı→I`; `¡ÓRALE!`, `MENÚ`,
+  `HÜSNÜ — İZMİR`), so every pre-folded `.toUpperCase()` call site was removed and Lupe's
+  and Rico's Spanish dialogue was restored with accents. The last copy marks followed
+  (title 68–73, HUD 55–59): `·`, `;`, `…`, `©`, `Ø` and a composed `Â`, and the cent sign
+  on the NYC storefront banners after them (title 74, HUD 60), so every authored string —
+  canvas, data and both UI languages — now has a real glyph. That list is no longer only
+  the data tables: `NEON_WORDS` in `backgrounds.ts` is painted by the coverage test too, so
+  a word a backdrop picks at random cannot silently fall back. Unmapped characters
+  would still draw `?` and log a warning naming the string instead of being folded, and
+  the test suite fails if one appears. Both TTFs are rebuilt from the same tables and
+  checked against the map by `tests/font.test.ts`; details in [docs/fonts.md](docs/fonts.md).
+
+- **Grab, throw and combo are covered through the input layer, not just the simulation** —
+  `e2e/controls.spec.ts` drives the built game in the Dragon's Den and reads the result back
+  off the authoritative snapshots. With the shipped keyboard bindings it walks into the
+  dummy's reach, clinches on S, throws on X and runs B.T.'s four-link chain on Z while the
+  HUD combo counter counts the landed hits; A / D / C prove jump, dodge and block, and a
+  second test injects a standard-mapping pad and repeats the whole sequence on B / Y / X /
+  A / LB / RB and the d-pad with no keyboard at all. A press has to land inside the previous
+  recovery to chain, so the pad test drums the button at the same 120 ms cadence.
+  `.github/workflows/ci.yml` typechecks, runs the unit suite and runs the whole Playwright
+  suite on every push and pull request; Pages still owns the deploy.
+
 ## STILL PLANNED
 
-- Vendor booths and storefronts both open the full interior shop scene; per-booth
-  counters (a hot-dog cart you buy from on the street) would be a nicer fit.
+- Vendor booths and storefronts both open the full interior shop scene; per-booth counters
+  (buy from the hot-dog cart or Kemal's pazar cart where they stand) would fit the concept
+  better than every stall opening the same room.
+- The light chain only links while the next press lands inside the previous recovery plus a
+  ten-tick buffer (about 0.2 s). It reads well on the keyboard; on a pad a slower rhythm
+  restarts the chain at link one instead of easing the window.
 - The Dondurma Man's page has a few frames where the stretched ice cream detaches into
   separate shapes; those drips are dropped rather than carried with the frame.
 - A second art pass on the enemy bodies and more attack-frame polish.
-- Vendor booths currently open the full interior scene; the concept asks for the
-  same menu as a street 
+- The training room teaches GRAB / SLAP / THROW, but there is no drill for the light chain,
+  the dodge window or blocking; the dummy never attacks, so those are learned on the street.

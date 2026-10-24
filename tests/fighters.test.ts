@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { FIGHTERS, FIGHTER_IDS, SECRET_OF, STARTER_IDS, type FighterId } from '../src/shared/data/fighters';
+import { FIGHTERS, FIGHTER_IDS, type FighterId } from '../src/shared/data/fighters';
 import { ATTACKS } from '../src/shared/data/attacks';
 
-// The two hidden fighters ship as data: a page imported into the atlas, a stat line and a
-// chain of attacks. A typo in any of those links shows up in game as an invisible fighter or
-// a fighter that freezes on the first punch, so the wiring is pinned down here.
+// The roster ships as data: a page imported into the atlas, a stat line and a chain of
+// attacks. A typo in any of those links shows up in game as an invisible fighter or a fighter
+// that freezes on the first punch, so the wiring is pinned down here.
 
 const index: Record<string, string> = JSON.parse(readFileSync('public/assets/sprites/index.json', 'utf8'));
 const atlas = (id: string) => JSON.parse(readFileSync(`public/assets/sprites/${id}.json`, 'utf8')) as {
@@ -13,14 +13,16 @@ const atlas = (id: string) => JSON.parse(readFileSync(`public/assets/sprites/${i
 };
 
 describe('roster', () => {
-  it('starts with the two heroes and hides the other two behind a card each', () => {
-    expect(STARTER_IDS).toEqual(['bt', 'sc']);
-    expect(Object.keys(SECRET_OF).sort()).toEqual(['bt', 'sc']);
+  it('offers the whole roster on the select screen, in one cyclable order', () => {
+    // the select card walks FIGHTER_IDS left and right, so this is the order a player sees
+    expect(FIGHTER_IDS).toEqual(['bt', 'sc', 'ozzi', 'aynur']);
     for (const id of FIGHTER_IDS) {
       const f = FIGHTERS[id];
       expect(f.id, id).toBe(id);
-      expect(f.secret ?? false, `${id} visibility`).toBe(STARTER_IDS.includes(id) === false);
-      if (f.secret) expect(SECRET_OF[f.unlockFrom!], `${id} is behind ${f.unlockFrom}`).toBe(id);
+      expect(f.name.length, `${id} name`).toBeGreaterThan(0);
+      expect(f.blurb.length, `${id} blurb`).toBeGreaterThan(0);
+      // nothing is hidden any more: every fighter is a stop on the card, not a reveal
+      expect(Object.keys(f), `${id} has no hidden roster state`).not.toContain('secret');
     }
   });
 

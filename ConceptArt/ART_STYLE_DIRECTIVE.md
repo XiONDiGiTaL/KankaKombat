@@ -77,6 +77,12 @@ rolled), **Ayran** (sealed cup), **Nutella** (jar), **Bananas** (bunch),
 **Baklava** (tray, pistachio top), **Sucuk** (horseshoe sausage ring). New
 pickups join this sheet's style: same pixel density, dark outlines, sparkle.
 
+The **shop-only meals** are a second, separate set: 24 dishes sold by the
+city shops, delivered as `assets/source/shops/shop_items_sheet.png` (6x4,
+transparent, no captions) and cut into the same 18px atlas. They never drop
+on the street; the shipped tables, the sheet's row order and the one icon
+still being redrawn (the beef patty) are in `docs/shops.md`.
+
 ## Enemies (same sheet layout as the heroes)
 
 | File | Enemy | Design / behaviour notes |

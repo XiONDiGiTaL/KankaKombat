@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ART, HAZARD_SIZE, hazardSize } from '../src/client/render/art';
 import { MIRRORED, paintedShop, STAGE_FOR, type StageArt } from '../src/client/render/stages';
 import { CHAPTERS } from '../src/shared/data/stages';
+import { ITEM_IDS } from '../src/shared/data/items';
 
 // The hand-authored maps in `src/client/render/art.ts` are rasterised at boot, so a ragged row
 // or a missing palette entry shows up in game as a torn sprite or a magenta pixel, never as an
@@ -43,6 +44,26 @@ describe('pixel art tables', () => {
         }
       }
     }
+  });
+});
+
+// The imported item atlas (tools/art/import_props.py) is built from two pages: the six
+// captioned drops and the 24 transparent shop meals. A shop meal whose id is missing from
+// the JSON draws as a blank chip instead of its icon, so the coverage is pinned here.
+describe('imported item atlas', () => {
+  it('has an 18px tile for every catalog item, drops first', () => {
+    const meta = JSON.parse(readFileSync('public/assets/props/items.json', 'utf8')) as { cell: [number, number]; ids: string[] };
+    expect(meta.cell).toEqual([18, 18]);
+    expect(meta.ids.length).toBe(ITEM_IDS.length);
+    for (const id of ITEM_IDS) expect(meta.ids, id).toContain(id);
+  });
+
+  it('ships Hüsnü\'s bakkal as a painted 384x126 room with him inside the art', () => {
+    const meta = JSON.parse(readFileSync('public/assets/shops/bakkal.json', 'utf8')) as { w: number; h: number; counterY: number; keeper?: string };
+    expect([meta.w, meta.h]).toEqual([384, 126]);
+    expect(meta.counterY).toBeGreaterThan(60);
+    expect(meta.counterY).toBeLessThan(126);
+    expect(meta.keeper).toBeUndefined();
   });
 });
 

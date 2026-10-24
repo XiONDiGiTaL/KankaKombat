@@ -1,0 +1,24 @@
+{
+  "note": "Append-only glyph order for the game's two bitmap fonts. v1 slots never move; the Spanish/inverted extension glyphs fill the documented gaps after them. tests/font.test.ts checks this file against src/client/render/font.ts.",
+  "title": {
+    "core": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?.,:\"'-+×/%♥★)",
+    "turkish": { "Ç": 51, "Ğ": 52, "İ": 53, "Ö": 54, "Ş": 55, "Ü": 56 },
+    "extension": {
+      "Á": 57, "É": 58, "Ó": 59, "Ú": 60, "Ñ": 61, "¡": 62, "¿": 63, "$": 64,
+      "—": 65, "–": 66, "’": 67, "·": 68, ";": 69, "…": 70, "©": 71, "Ø": 72, "Â": 73,
+      "¢": 74
+    }
+  },
+  "hud": {
+    "core": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "extension": {
+      "Á": 36, "É": 37, "Í": 38, "Ó": 39, "Ú": 40, "Ñ": 41, "¡": 42, "¿": 43,
+      "Ç": 44, "Ğ": 45, "İ": 46, "Ö": 47, "Ş": 48, "Ü": 49, "$": 50, "&": 51,
+      "—": 52, "–": 53, "’": 54, ";": 55, "…": 56, "©": 57, "Ø": 58, "Â": 59,
+      "¢": 60
+    }
+  },
+  "lowercase_tr": { "i": "İ", "ı": "I" },
+  "lowercase_intl": { "i": "I" },
+  "unmapped": "?"
+}

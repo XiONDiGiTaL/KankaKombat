@@ -23,6 +23,11 @@ const R = (c: Ctx, x: number, y: number, w: number, h: number, col: string) => {
 const P = (c: Ctx, x: number, y: number, col: string) => R(c, x, y, 1, 1, col);
 const OUT = '#141019';
 
+/** What the NYC storefronts advertise in neon. Drawn with the title font, so every letter
+ *  and mark here must exist in the glyph tables — the coverage test in tests/font.test.ts
+ *  paints this list, which is how the cent sign was found missing. */
+export const NEON_WORDS = ['PIZZA', 'DELI', 'BAR', 'PAWN', 'LAUNDRY', '99¢', 'NAILS', 'LIQUOR'];
+
 /** Banded sky with a one-pixel checker dither where two bands meet. */
 function sky(c: Ctx, bands: string[], h: number, stars = 0, rng?: Rng): void {
   const bh = h / bands.length;
@@ -892,9 +897,8 @@ const THEMES: Record<string, Theme> = {
         for (let i = 0; i < 24; i += 2) P(c, x + bw - 22 + (i % 16), STREET_TOP - 26 + i, '#4a3a32');
         // awning + neon
         if (rng.chance(0.7)) awning(c, x + 4, STREET_TOP - 34, bw - 30, rng.pick(['#8a2228', '#24503a', '#2a2a5e']), '#e8dcc8');
-        const words = ['PIZZA', 'DELI', 'BAR', 'PAWN', 'LAUNDRY', '99¢', 'NAILS', 'LIQUOR'];
         const fg = rng.pick(['#f0d838', '#f06a8a', '#5ae8c0', '#8ac8ff']);
-        neon(c, x + bw / 2, top + 6, rng.pick(words), fg, '#141018', Math.max(24, Math.min(bw - 10, 78)));
+        neon(c, x + bw / 2, top + 6, rng.pick(NEON_WORDS), fg, '#141018', Math.max(24, Math.min(bw - 10, 78)));
         // standpipe + trash bags against the wall
         R(c, x + 3, STREET_TOP - 8, 2, 8, '#a03028'); R(c, x + 2, STREET_TOP - 10, 4, 2, '#c84038');
         if (rng.chance(0.5)) { disc(c, x + bw - 8, STREET_TOP - 3, 4, '#2a2a34'); disc(c, x + bw - 4, STREET_TOP - 2, 3, '#22222c'); }

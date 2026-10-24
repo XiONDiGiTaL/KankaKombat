@@ -3,7 +3,7 @@
 import './style.css';
 import { SCREEN_H, SCREEN_W, TICK_HZ } from '../shared/data/constants';
 import { BTN } from '../shared/data/input';
-import { FIGHTERS, FighterDef, FighterId, SECRET_OF, STARTER_IDS } from '../shared/data/fighters';
+import { FIGHTERS, FIGHTER_IDS, FighterDef, FighterId } from '../shared/data/fighters';
 import { ITEMS, ITEM_IDS, ItemId } from '../shared/data/items';
 import { SHOPS } from '../shared/data/shops';
 import { CHAPTERS, sectionAt } from '../shared/data/stages';
@@ -16,11 +16,12 @@ import type { SimEvent } from '../shared/sim/types';
 import { Renderer, SLOT_COLORS } from './render/renderer';
 import { contentBox, getSheet, loadSheets } from './render/sprites';
 import { LEGEND_TICKS, drawControlLegend, legendAlpha, legendRows } from './render/controllegend';
-import { artCanvas, loadProps } from './render/art';
+import { artCanvas, hasItemArt, loadProps } from './render/art';
 import { loadNpcs } from './render/npcs';
 import { loadStages } from './render/stages';
+import { loadShopArt } from './render/shops';
 import { Crowd } from './ambient';
-import { drawText } from './render/font';
+import { drawText, fold } from './render/font';
 import { Input, ACTIONS, keyLabel } from './input/input';
 import { Rumble, classifyHit } from './input/rumble';
 import { Audio } from './audio/audio';
@@ -94,6 +95,7 @@ class App {
         loadProps('./assets/props/'),
         loadNpcs('./assets/sprites/'),
         loadStages('./assets/stages/'),
+        loadShopArt('./assets/shops/'),
       ]);
     } catch (e) {
       $('loadmsg').textContent = 'Could not load game assets. Check your connection and refresh.';
@@ -217,7 +219,13 @@ class App {
     });
     $('resume').addEventListener('click', () => this.togglePause());
     $('quit').addEventListener('click', () => this.quitToTitle());
-    this.buildCards();
+    this.buildRoster();
+    for (const id of FIGHTER_IDS) {
+      const b = document.createElement('button');
+      b.className = 'pick'; b.dataset.pick = id; b.textContent = FIGHTERS[id].name;
+      b.addEventListener('click', () => this.lobbyPick(id));
+      $('pick-row').appendChild(b);
+    }
     this.syncSound();
     $<HTMLInputElement>('name').value = loadSettings().name;
     $('solo-start').addEventListener('click', () => this.startSolo());
@@ -229,8 +237,6 @@ class App {
     $('leave-room').addEventListener('click', () => this.quitToTitle());
     $('ready-btn').addEventListener('click', () => { const me = this.client?.lobby.find((p) => p.id === this.client!.myId); this.client?.send({ t: 'ready', r: !me?.ready }); this.audio.sfx('ok'); });
     $('start-btn').addEventListener('click', () => { this.client?.send({ t: 'start', ...this.debugStart() }); this.audio.sfx('ok'); });
-    $('pick-bt').addEventListener('click', () => this.lobbyPick('bt'));
-    $('pick-sc').addEventListener('click', () => this.lobbyPick('sc'));
     $('end-title').addEventListener('click', () => this.quitToTitle());
     $('end-lobby').addEventListener('click', () => {
       if (!this.client) return;
@@ -253,13 +259,18 @@ class App {
       const up = (e: PointerEvent) => { e.preventDefault(); b.classList.remove('on'); this.input.setTouch(bit, false); };
       b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
     });
-    // keyboard navigation in menus: arrows move focus between buttons (and flip the
-    // fighter cards over to their secret on Up)
+    // keyboard navigation in menus: up/down move focus between buttons, and on the fighter
+    // select the left/right keys walk the roster (the shown card is the pick)
     window.addEventListener('keydown', (e) => {
       if (this.screen === 'none' || this.screen === 'title' || this.screen === 'shop') return;
       const t = e.target as HTMLElement;
       if (t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'range' && (t as HTMLInputElement).type !== 'checkbox') return;
       if (e.key === 'Escape' && this.tipPin) { this.hideStatTip(); return; }
+      if (this.screen === 'select' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        this.cycleRoster(e.key === 'ArrowRight' ? 1 : -1);
+        return;
+      }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       e.preventDefault();
       this.menuMove(e.key === 'ArrowDown' ? 1 : -1);
@@ -310,38 +321,70 @@ class App {
     this.go('menu');
   }
 
-  buildCards(): void {
-    const wrap = $('cards');
-    wrap.innerHTML = '';
-    for (const id of STARTER_IDS) {
-      const card = document.createElement('div');
-      card.className = 'card'; card.tabIndex = 0; card.dataset.base = id;
-      this.fillCard(card, FIGHTERS[id]);
-      const pick = () => {
-        this.fighter = card.dataset.f as FighterId;
-        saveSettings({ fighter: this.fighter });
-        this.audio.sfx('ok');
-        wrap.querySelectorAll('.card').forEach((c) => c.classList.toggle('on', (c as HTMLElement).dataset.f === this.fighter));
-      };
-      card.addEventListener('click', pick);
-      card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
-      wrap.appendChild(card);
+  /** Index into FIGHTER_IDS of the fighter the hero card is showing. */
+  private roster = 0;
+
+  /** The roster is public from the start: every fighter is a stop on one card that is cycled
+   *  left and right, so there is no hidden state to get stuck behind. The card shows the
+   *  fighter the index points at and that fighter IS the pick - FIGHT! starts with it. */
+  buildRoster(): void {
+    const deck = $('cards');
+    deck.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'card on';
+    deck.appendChild(card);
+    const saved = FIGHTER_IDS.indexOf(this.fighter);
+    this.roster = saved < 0 ? 0 : saved;
+    const rail = $('rail');
+    rail.innerHTML = '';
+    for (const id of FIGHTER_IDS) {
+      const tab = document.createElement('button');
+      tab.type = 'button'; tab.className = 'rtab'; tab.dataset.tab = id;
+      tab.textContent = FIGHTERS[id].name;
+      tab.addEventListener('click', () => { this.selectRoster(FIGHTER_IDS.indexOf(id)); this.audio.sfx('ok'); });
+      rail.appendChild(tab);
     }
-    // a saved secret pick stays visible on the menu it came from
-    if (FIGHTERS[this.fighter].secret) {
-      const card = wrap.querySelector<HTMLElement>(`[data-base="${FIGHTERS[this.fighter].unlockFrom}"]`);
-      if (card) this.fillCard(card, FIGHTERS[this.fighter]);
-    }
+    $('peek-prev').addEventListener('click', () => this.cycleRoster(-1));
+    $('peek-next').addEventListener('click', () => this.cycleRoster(1));
+    this.showRoster();
   }
 
-  /** Draw one fighter into a card, replacing whatever it showed before. The card itself keeps
-   *  its identity and focus, so revealing a secret does not move the player's selection. */
+  /** Step the roster by one, wrapping at both ends. */
+  cycleRoster(dir: number): void {
+    this.selectRoster((this.roster + dir + FIGHTER_IDS.length) % FIGHTER_IDS.length);
+    this.audio.sfx('ui');
+  }
+
+  /** Show the fighter at `i` on the hero card, in the peek tiles and on the rail. */
+  selectRoster(i: number): void {
+    this.roster = (i + FIGHTER_IDS.length) % FIGHTER_IDS.length;
+    this.showRoster();
+  }
+
+  private showRoster(): void {
+    const id = FIGHTER_IDS[this.roster];
+    this.fighter = id;
+    saveSettings({ fighter: id });
+    const card = document.querySelector<HTMLElement>('#cards .card');
+    if (card) this.fillCard(card, FIGHTERS[id]);
+    const n = FIGHTER_IDS.length;
+    const neighbours: [HTMLElement, FighterId][] = [
+      [$('peek-prev'), FIGHTER_IDS[(this.roster + n - 1) % n]],
+      [$('peek-next'), FIGHTER_IDS[(this.roster + 1) % n]],
+    ];
+    for (const [el, who] of neighbours) {
+      el.dataset.f = who;
+      const nm = el.querySelector<HTMLElement>('.nm');
+      if (nm) nm.textContent = FIGHTERS[who].name;
+    }
+    $('rail').querySelectorAll<HTMLElement>('.rtab').forEach((tab) => tab.classList.toggle('on', tab.dataset.tab === id));
+  }
+
+  /** Draw one fighter into the hero card. */
   private fillCard(card: HTMLElement, f: FighterDef): void {
     // the rows this tip belongs to are about to be replaced
     if (this.tipPin && card.contains(this.tipPin)) this.hideStatTip();
     card.dataset.f = f.id;
-    card.classList.toggle('secret', !!f.secret);
-    card.classList.toggle('on', this.fighter === f.id);
     // the backing store follows the CSS box in drawCards; this is just a sane first size
     const cv = document.createElement('canvas'); cv.width = 128; cv.height = 152;
     // One grid row per stat: the label shares the auto-sized first column and the track
@@ -356,12 +399,7 @@ class App {
     // data-i18n keeps the blurb tied to its English key, so a rebuild while the UI is in
     // Turkish cannot leave the Turkish text cached as the English original.
     const blurb = f.blurb.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    const tag = f.secret ? ` <span class="tag" data-i18n="SECRET">${tr('SECRET')}</span>` : '';
-    // the starter cards advertise what they are hiding, so the reveal is discoverable
-    const hint = !f.secret && SECRET_OF[f.id]
-      ? `<p class="secret-hint" data-i18n="PRESS UP FOR A SECRET FIGHTER">${tr('PRESS UP FOR A SECRET FIGHTER')}</p>`
-      : '';
-    card.innerHTML = `<div><h3>${f.name}${tag}</h3><p data-i18n="${blurb}">${tr(f.blurb)}</p>${hint}<div class="stats">${stats}</div></div>`;
+    card.innerHTML = `<div><h3>${f.name}</h3><p data-i18n="${blurb}">${tr(f.blurb)}</p><div class="stats">${stats}</div></div>`;
     card.prepend(cv);
     // Hover, focus and tap all open the same tooltip. A tap must not fall through to the
     // card beneath it, or reading a bar would silently change the picked fighter.
@@ -372,20 +410,11 @@ class App {
       row.addEventListener('focus', () => this.showStatTip(row));
       row.addEventListener('blur', () => { if (this.tipPin !== row) this.hideStatTip(); });
     });
-    // the hint is the same reveal for a pointer or a tapping thumb; it must not also
-    // select the fighter whose card it sits on
-    card.querySelector('.secret-hint')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const secret = SECRET_OF[f.id];
-      if (!secret) return;
-      this.fillCard(card, FIGHTERS[secret]);
-      this.audio.sfx('coin');
-    });
   }
 
   /** One tooltip element for the whole screen. It lives on the body so it can overhang the
    *  panel that owns the card instead of being clipped by its scroll box, and cards can be
-   *  rebuilt (a secret reveal) without it being thrown away with them. */
+   *  rebuilt (a roster step) without it being thrown away with them. */
   private tipEl: HTMLElement | null = null;
   /** A tapped row keeps its tooltip open until the same row, another row or the page is
    *  tapped again; hovering never pins. */
@@ -422,9 +451,8 @@ class App {
     let x = Math.max(8, Math.min(innerWidth - w - 8, rowBox.left + rowBox.width / 2 - w / 2));
     const above = blockBox.top - h - 6;
     let y = above >= 8 ? above : Math.min(innerHeight - h - 8, blockBox.bottom + 6);
-    // A card with the secret hint has just enough text above its bars that the tip would
-    // clip the fighter's name. When that happens it slides left over the portrait instead,
-    // lined up with the bars: no name, blurb or bar is ever covered by it.
+    // When the tip would ride up over the fighter's name it slides left over the portrait
+    // instead, lined up with the bars: the name is never covered by it.
     const sideRoom = blockBox.left - w - 8;
     if (heading && y < heading.bottom + 2 && sideRoom >= 8) {
       x = sideRoom;
@@ -448,77 +476,68 @@ class App {
     this.showStatTip(row);
   }
 
-  /** Arrow Up on a starter card flips it to the secret hiding behind it. The card stays
-   *  revealed once found; the pick is only made by confirming the card. Returns true when
-   *  the press was spent on the reveal, so focus does not also move. */
-  private flipCard(card: HTMLElement, dir: number): boolean {
-    const shown = FIGHTERS[card.dataset.f as FighterId];
-    const nextId = !shown.secret && dir < 0 ? SECRET_OF[shown.id] : undefined;
-    if (!nextId) return false;
-    this.fillCard(card, FIGHTERS[nextId]);
-    this.audio.sfx('coin');
-    return true;
-  }
-
-  /** Fighter cards: the in-game sprite on a select-screen backdrop. Every card shares one
-   *  whole-pixel scale and one floor line, and each fighter is centred on his own opaque
-   *  bounds, so the two stand at matching size on the same baseline and nothing is cropped. */
+  /** Fighter select: the hero card's sprite, animated on its idle/ready loop, and the two
+   *  peek tiles either side painted from the same atlas. Each canvas is scaled by the largest
+   *  whole multiple of the sprite that fits it, so the centre fighter is big and the peeks
+   *  are a deliberately smaller preview of where LEFT and RIGHT will take you. */
   drawCards(): void {
     if (this.screen !== 'select') return;
-    const pad = 8, floorGap = 12;
-    const cards = [...document.querySelectorAll<HTMLElement>('#cards .card')].map((card) => {
-      const cv = card.querySelector('canvas')!;
-      // The frame stretches to the card height: follow it so the sprite is never squeezed.
-      const boxW = Math.round(cv.clientWidth), boxH = Math.round(cv.clientHeight);
-      if (boxW && boxH && (cv.width !== boxW || cv.height !== boxH)) { cv.width = boxW; cv.height = boxH; }
-      const sheet = getSheet(card.dataset.f!);
-      return { card, cv, sheet, box: sheet ? contentBox(sheet, ['idle', 'ready']) : null };
-    });
-    // One scale for the whole row: the largest whole multiple of the sprite that still fits
-    // the tightest frame. Halving each card separately would make the fighters differ in size.
-    let scale = 0;
-    for (const { cv, box } of cards) {
-      if (!box) continue;
-      const fit = Math.floor(Math.min((cv.width - pad * 2) / box[2], (cv.height - pad * 2 - floorGap) / box[3]));
-      scale = scale ? Math.min(scale, Math.max(1, fit)) : Math.max(1, fit);
+    const card = document.querySelector<HTMLElement>('#cards .card');
+    const cv = card?.querySelector('canvas');
+    if (card && cv) this.paintPortrait(cv, card.dataset.f as FighterId, false);
+    for (const peek of ['peek-prev', 'peek-next']) {
+      const el = $(peek);
+      const pcv = el.querySelector('canvas');
+      if (pcv && el.dataset.f) this.paintPortrait(pcv, el.dataset.f as FighterId, true);
     }
+  }
+
+  private paintPortrait(cv: HTMLCanvasElement, id: FighterId, peek: boolean): void {
+    // The frame follows its CSS box, so the sprite is never squeezed by the card layout.
+    const boxW = Math.round(cv.clientWidth), boxH = Math.round(cv.clientHeight);
+    if (boxW && boxH && (cv.width !== boxW || cv.height !== boxH)) { cv.width = boxW; cv.height = boxH; }
+    const pad = peek ? 4 : 8, floorGap = peek ? 5 : 12;
+    const c = cv.getContext('2d')!;
+    c.imageSmoothingEnabled = false;
+    c.clearRect(0, 0, cv.width, cv.height);
+    const floor = cv.height - floorGap;
+    // backdrop: dusk gradient, a halo behind the fighter, a faint checker so the flat
+    // panel reads as a screen rather than a photo, then the floor the fighter stands on.
+    const bg = c.createLinearGradient(0, 0, 0, floor);
+    bg.addColorStop(0, '#514070'); bg.addColorStop(0.6, '#33264a'); bg.addColorStop(1, '#241a34');
+    c.fillStyle = bg; c.fillRect(0, 0, cv.width, floor);
+    const halo = c.createRadialGradient(cv.width / 2, floor - cv.height * 0.34, 2, cv.width / 2, floor - cv.height * 0.34, cv.height * 0.6);
+    halo.addColorStop(0, 'rgba(246,232,184,0.15)'); halo.addColorStop(1, 'rgba(246,232,184,0)');
+    c.fillStyle = halo; c.fillRect(0, 0, cv.width, floor);
+    c.fillStyle = 'rgba(255,255,255,0.03)';
+    for (let y = 0; y < floor; y += 8) for (let x = (y / 8) % 2 ? 8 : 0; x < cv.width; x += 16) c.fillRect(x, y, 8, 8);
+    c.fillStyle = '#1a1220'; c.fillRect(0, floor, cv.width, cv.height - floor);
+    c.fillStyle = '#6a5686'; c.fillRect(0, floor, cv.width, 1);
+    const sheet = getSheet(id);
+    const box = sheet ? contentBox(sheet, ['idle', 'ready']) : null;
+    if (!sheet || !box) return;
+    // the largest whole multiple of the sprite that fits this frame, on one floor line
+    const fit = Math.min((cv.width - pad * 2) / box[2], (cv.height - pad * 2 - floorGap) / box[3]);
+    const scale = Math.max(1, Math.floor(fit));
+    // the hero card breathes on its ready loop; the peeks hold their idle pose so they read
+    // as previews instead of three fighters all fighting for attention
+    const anim = sheet.atlas.anims[peek ? 'idle' : 'ready'] ?? sheet.atlas.anims.idle;
+    const total = anim.frames.reduce((s, f) => s + f.t, 0);
     const t = Math.floor(performance.now() / (1000 / 60));
-    for (const { card, cv, sheet, box } of cards) {
-      const c = cv.getContext('2d')!;
-      c.imageSmoothingEnabled = false;
-      c.clearRect(0, 0, cv.width, cv.height);
-      const floor = cv.height - floorGap;
-      // backdrop: dusk gradient, a halo behind the fighter, a faint checker so the flat
-      // panel reads as a screen rather than a photo, then the floor the fighter stands on.
-      const bg = c.createLinearGradient(0, 0, 0, floor);
-      bg.addColorStop(0, '#514070'); bg.addColorStop(0.6, '#33264a'); bg.addColorStop(1, '#241a34');
-      c.fillStyle = bg; c.fillRect(0, 0, cv.width, floor);
-      const halo = c.createRadialGradient(cv.width / 2, floor - cv.height * 0.34, 2, cv.width / 2, floor - cv.height * 0.34, cv.height * 0.6);
-      halo.addColorStop(0, 'rgba(246,232,184,0.15)'); halo.addColorStop(1, 'rgba(246,232,184,0)');
-      c.fillStyle = halo; c.fillRect(0, 0, cv.width, floor);
-      c.fillStyle = 'rgba(255,255,255,0.03)';
-      for (let y = 0; y < floor; y += 8) for (let x = (y / 8) % 2 ? 8 : 0; x < cv.width; x += 16) c.fillRect(x, y, 8, 8);
-      c.fillStyle = '#1a1220'; c.fillRect(0, floor, cv.width, cv.height - floor);
-      c.fillStyle = '#6a5686'; c.fillRect(0, floor, cv.width, 1);
-      if (!sheet || !box || !scale) continue;
-      const on = card.classList.contains('on');
-      const anim = sheet.atlas.anims[on ? 'ready' : 'idle'] ?? sheet.atlas.anims.idle;
-      const total = anim.frames.reduce((s, f) => s + f.t, 0);
-      let tt = t % total, fi = anim.frames[0].i;
-      for (const f of anim.frames) { if (tt < f.t) { fi = f.i; break; } tt -= f.t; }
-      const [cw, ch] = sheet.atlas.cell;
-      const w = box[2] * scale, h = box[3] * scale;
-      const dx = Math.round((cv.width - w) / 2), dy = floor - h;
-      // contact shadow, then the sprite with his feet exactly on the floor line
-      c.save();
-      c.translate(cv.width / 2, floor); c.scale(1, 0.18);
-      const shadow = c.createRadialGradient(0, 0, 1, 0, 0, w * 0.55);
-      shadow.addColorStop(0, 'rgba(10,7,16,0.6)'); shadow.addColorStop(1, 'rgba(10,7,16,0)');
-      c.fillStyle = shadow; c.beginPath(); c.arc(0, 0, w * 0.55, 0, Math.PI * 2); c.fill();
-      c.restore();
-      c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw + box[0], Math.floor(fi / sheet.atlas.cols) * ch + box[1],
-        box[2], box[3], dx, dy, w, h);
-    }
+    let tt = peek || !total ? 0 : t % total, fi = anim.frames[0].i;
+    for (const f of anim.frames) { if (tt < f.t) { fi = f.i; break; } tt -= f.t; }
+    const [cw, ch] = sheet.atlas.cell;
+    const w = box[2] * scale, h = box[3] * scale;
+    const dx = Math.round((cv.width - w) / 2), dy = floor - h;
+    // contact shadow, then the sprite with their feet exactly on the floor line
+    c.save();
+    c.translate(cv.width / 2, floor); c.scale(1, 0.18);
+    const shadow = c.createRadialGradient(0, 0, 1, 0, 0, w * 0.55);
+    shadow.addColorStop(0, 'rgba(10,7,16,0.6)'); shadow.addColorStop(1, 'rgba(10,7,16,0)');
+    c.fillStyle = shadow; c.beginPath(); c.arc(0, 0, w * 0.55, 0, Math.PI * 2); c.fill();
+    c.restore();
+    c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw + box[0], Math.floor(fi / sheet.atlas.cols) * ch + box[1],
+      box[2], box[3], dx, dy, w, h);
   }
 
   drawLogo(): void {
@@ -530,9 +549,9 @@ class App {
         drawText(c, t, 160 + dx, y + dy, cc, { scale: 4, align: 'center', shadow: null });
       drawText(c, t, 160, y, col, { scale: 4, align: 'center', shadow: null });
     };
-    big(BRANDING.title.split(' ')[0].toUpperCase(), 4, '#f0c818');
-    big(BRANDING.title.split(' ').slice(1).join(' ').toUpperCase(), 36, '#f6e8b8');
-    drawText(c, BRANDING.subtitle.toUpperCase(), 160, 74, '#e0303c', { scale: 2, align: 'center', outline: true });
+    big(BRANDING.title.split(' ')[0], 4, '#f0c818');
+    big(BRANDING.title.split(' ').slice(1).join(' '), 36, '#f6e8b8');
+    drawText(c, BRANDING.subtitle, 160, 74, '#e0303c', { scale: 2, align: 'center', outline: true });
   }
 
   buildHowto(): void {
@@ -541,7 +560,7 @@ class App {
     for (const a of ACTIONS) {
       const row = document.createElement('tr');
       const keys = this.input.keys[a.id] ?? [];
-      row.innerHTML = `<td>${tr(a.label).toUpperCase()}</td><td>${keys.map((k) => `<span class="kbd" data-a="${a.id}">${keyLabel(k)}</span>`).join(' ')}</td>`;
+      row.innerHTML = `<td>${fold(tr(a.label))}</td><td>${keys.map((k) => `<span class="kbd" data-a="${a.id}">${keyLabel(k)}</span>`).join(' ')}</td>`;
       tbl.appendChild(row);
     }
     tbl.querySelectorAll<HTMLElement>('.kbd').forEach((k) => k.addEventListener('click', () => {
@@ -550,13 +569,26 @@ class App {
     }));
     const food = $('foodtable');
     food.innerHTML = '';
+    let listedMeals = false;
     for (const id of ITEM_IDS) {
       const d = ITEMS[id];
+      // one heading between the two economies: the street drops and the city menus
+      if (!listedMeals && d.dropWeight === 0) {
+        listedMeals = true;
+        const grp = document.createElement('tr');
+        grp.className = 'grp';
+        grp.innerHTML = `<td colspan="4">${tr('SHOP MEALS (SOLD BY CITY VENDORS)')}</td>`;
+        food.appendChild(grp);
+      }
       const row = document.createElement('tr');
-      const cv = document.createElement('canvas'); const a = artCanvas(id); cv.width = a.width; cv.height = a.height; cv.getContext('2d')!.drawImage(a, 0, 0);
-      const td0 = document.createElement('td'); td0.appendChild(cv);
-      row.appendChild(td0);
-      row.insertAdjacentHTML('beforeend', `<td>${tr(d.name).toUpperCase()}</td><td>${tr(d.desc)}</td><td>₺${d.price} / $${d.price}</td>`);
+      if (hasItemArt(id)) {
+        const cv = document.createElement('canvas'); const a = artCanvas(id); cv.width = a.width; cv.height = a.height; cv.getContext('2d')!.drawImage(a, 0, 0);
+        const td0 = document.createElement('td'); td0.appendChild(cv);
+        row.appendChild(td0);
+      } else {
+        row.appendChild(document.createElement('td'));
+      }
+      row.insertAdjacentHTML('beforeend', `<td>${fold(tr(d.name))}</td><td>${tr(d.desc)}</td><td>₺${d.price} / $${d.price}</td>`);
       food.appendChild(row);
     }
   }
@@ -609,7 +641,7 @@ class App {
     this.renderer.fx = new (this.renderer.fx.constructor as new () => typeof this.renderer.fx)();
     this.renderer.combos.clear();
     c.onChange = () => this.onClientChange();
-    c.onResult = (r) => { if (r.nonce && r.nonce === this.shopPending) { this.shopPending = null; if (!r.ok) { this.flashShop(tr((r.reason ?? 'Cannot buy').toUpperCase())); this.audio.sfx('error'); } } };
+    c.onResult = (r) => { if (r.nonce && r.nonce === this.shopPending) { this.shopPending = null; if (r.ok) this.renderer.shopServed(); else { this.flashShop(tr(r.reason ?? 'Cannot buy')); this.audio.sfx('error'); } } };
     c.onError = (code, msg) => { this.toast(msg, true); if (code === 'room-full' || code === 'room-not-found') this.quitToTitle(false); };
     this.autopilot = AUTOPILOT ? new Bot('', 3) : null;
     // a local authority answers the hello synchronously, before the callbacks above existed
@@ -724,7 +756,7 @@ class App {
     $('ready-btn').textContent = me?.ready ? 'UNREADY' : 'READY';
     $('start-btn').hidden = !c.isHost;
     ($('start-btn') as HTMLButtonElement).disabled = !c.canStart;
-    $('pick-bt').classList.toggle('on', me?.f === 'bt'); $('pick-sc').classList.toggle('on', me?.f === 'sc');
+    document.querySelectorAll<HTMLElement>('[data-pick]').forEach((b) => b.classList.toggle('on', b.dataset.pick === me?.f));
     $('lobby-msg').textContent = c.isHost ? (c.canStart ? tr('Everyone is ready — press START!') : tr('Waiting for everyone to ready up. Share the code or link.')) : tr('Ready up! The host starts the game.');
   }
 
@@ -802,18 +834,16 @@ class App {
   private menuItems(): HTMLElement[] {
     const root = document.querySelector(`#${this.screen}`);
     if (!root) return [];
-    return [...root.querySelectorAll<HTMLElement>('button:not([disabled]), select, .card')]
+    return [...root.querySelectorAll<HTMLElement>('button:not([disabled]), select')]
       .filter((x) => x.offsetParent !== null)
-      // a stat row lives inside a card and only explains itself: it is not a menu stop
-      .filter((x) => x.classList.contains('card') || !x.closest('.card'));
+      // a stat row lives inside the hero card and only explains itself: it is not a menu stop
+      .filter((x) => !x.closest('.card'));
   }
 
   private menuMove(dir: number): void {
     const items = this.menuItems();
     if (!items.length) return;
     const active = document.activeElement as HTMLElement | null;
-    // Up on B.T. / S.C. asks the card for its hidden fighter instead of moving focus
-    if (this.screen === 'select' && active && active.classList.contains('card') && this.flipCard(active, dir)) return;
     const i = items.indexOf(active as HTMLElement);
     const next = items[i < 0 ? (dir > 0 ? 0 : items.length - 1) : (i + dir + items.length) % items.length];
     next?.focus({ preventScroll: true });
@@ -824,7 +854,7 @@ class App {
   private menuPrimary(): HTMLElement | null {
     const items = this.menuItems();
     const active = document.activeElement as HTMLElement | null;
-    if (active && items.includes(active) && (active.tagName === 'BUTTON' || active.classList.contains('card'))) return active;
+    if (active && items.includes(active) && active.tagName === 'BUTTON') return active;
     const marked = [...document.querySelectorAll<HTMLElement>(`#${this.screen} [data-primary]`)].filter((x) => x.offsetParent !== null);
     return marked[0] ?? items.find((x) => x.tagName === 'BUTTON') ?? null;
   }
@@ -855,7 +885,13 @@ class App {
   /** Gamepad presses in menus: A/X/Start confirm, B/Y cancel, d-pad or stick moves. */
   private menuPad(bits: number): void {
     if (this.screen === 'none' || this.screen === 'loading' || this.screen === 'shop') return;
-    if (bits & (BTN.DOWN | BTN.RIGHT)) this.menuMove(1);
+    if (this.screen === 'select') {
+      // left/right walk the roster; up/down still move focus through the name field and buttons
+      if (bits & BTN.RIGHT) this.cycleRoster(1);
+      else if (bits & BTN.LEFT) this.cycleRoster(-1);
+      if (bits & BTN.DOWN) this.menuMove(1);
+      else if (bits & BTN.UP) this.menuMove(-1);
+    } else if (bits & (BTN.DOWN | BTN.RIGHT)) this.menuMove(1);
     else if (bits & (BTN.UP | BTN.LEFT)) this.menuMove(-1);
     if (bits & (BTN.JUMP | BTN.LIGHT | BTN.START)) this.menuConfirm();
     else if (bits & (BTN.GRAB | BTN.HEAVY)) this.menuCancel();
@@ -1009,7 +1045,7 @@ class App {
         case 'oneup': { const t = ent(e.id); if (t) { fx.sparkle(t.x, 30, t.z, '#f6f6f2'); fx.text(t.x, 56, t.z, '1UP!', '#8ac8ff', true); } a.sfx('oneup'); break; }
         case 'stash': { const t = ent(e.id); if (t) fx.text(t.x, 54, t.z, 'INTO BAG', '#f6e8b8'); a.sfx('ok'); break; }
         case 'msg': { const t = ent(e.id); if (t) fx.text(t.x, 58, t.z, e.text, '#ffb04a'); if (isMe(e.id)) { a.sfx('error'); if (this.screen === 'shop') this.flashShop(tr(e.text)); } break; }
-        case 'buy': { const t = ent(e.id); if (t) fx.text(t.x, 58, t.z, '+' + ITEMS[e.item].name.toUpperCase(), '#4ad06a'); a.sfx('buy'); if (isMe(e.id)) this.flashShop(`${tr('BOUGHT')} ${tr(ITEMS[e.item].name).toUpperCase()}!`); break; }
+        case 'buy': { const t = ent(e.id); if (t) fx.text(t.x, 58, t.z, '+' + ITEMS[e.item].name, '#4ad06a'); a.sfx('buy'); if (isMe(e.id)) this.flashShop(`${tr('BOUGHT')} ${tr(ITEMS[e.item].name)}!`); break; }
         case 'grab':
           a.sfx('grab');
           // buzz whoever is in the grapple: the grabber, or the player being held

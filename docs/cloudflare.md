@@ -95,9 +95,18 @@ minutes; `dist/assets/*` names change on every build anyway. `og.png`, `favicon.
 `/fonts/*` can take a shorter custom TTL (a day) if they are hit often.
 
 The soundtrack sits under that same rule (`/kankakombat/assets/music/*.mp3`) but its
-filenames are **not** content-hashed. Replacing a track under the same name leaves the old
-file cached at the edge for up to a year, so give the new master a new name (for example
-`nyc-v2.mp3`) and update `src/shared/data/music.ts`, or purge those URLs after the deploy.
+filenames are **not** content-hashed. `musicUrl()` therefore appends the theme's `rev`
+(`/kankakombat/assets/music/nyc.mp3?v=1`) and Cloudflare's default cache key includes the
+query string, so a replaced master is a different URL and a different cache entry.
+**When a track is replaced, bump its `rev` in `src/shared/data/music.ts`** — the filename
+may stay the same, and nothing has to be purged. If a replacement ever ships without a
+bump, it is stale for up to a year; a higher-priority rule for the soundtrack narrows that
+to a day:
+
+- **When:** `starts_with(http.request.uri.path, "/kankakombat/assets/music/")`
+- **Then:** Eligible for cache, Edge TTL **1 day**, Browser TTL **1 day**.
+
+Cache rules stop at the first match, so this one has to sit above the `/assets/` rule.
 
 ## 4. Verify
 

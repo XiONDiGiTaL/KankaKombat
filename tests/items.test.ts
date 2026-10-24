@@ -102,28 +102,28 @@ describe('shops', () => {
   }
   it('accepts valid purchases and deducts the right amount', () => {
     const { sim, ps: [p] } = inShop();
-    p.money = ITEMS.nutella.price + 20;
-    const r = sim.command('p0', { c: 'buy', item: 'nutella', nonce: 'n1' });
+    p.money = ITEMS.bronxhero.price + 20;
+    const r = sim.command('p0', { c: 'buy', item: 'bronxhero', nonce: 'n1' });
     expect(r.ok).toBe(true);
     expect(p.money).toBe(20);
-    expect(p.bag).toEqual(['nutella']);
+    expect(p.bag).toEqual(['bronxhero']);
   });
   it('rejects unaffordable, unstocked, duplicate and out-of-shop purchases', () => {
     const { sim, ps: [p] } = inShop();
     p.money = 10;
-    expect(sim.command('p0', { c: 'buy', item: 'nutella', nonce: 'a' }).ok).toBe(false);
+    expect(sim.command('p0', { c: 'buy', item: 'bagel', nonce: 'a' }).ok).toBe(false);
     expect(p.money).toBe(10);
     p.money = 1000;
-    expect(sim.command('p0', { c: 'buy', item: 'pizza', nonce: 'b' }).reason).toBe('not sold here');
-    expect(sim.command('p0', { c: 'buy', item: 'nutella', nonce: 'c' }).ok).toBe(true);
-    expect(sim.command('p0', { c: 'buy', item: 'nutella', nonce: 'c' }).reason).toBe('duplicate');
+    expect(sim.command('p0', { c: 'buy', item: 'taco', nonce: 'b' }).reason).toBe('not sold here');
+    expect(sim.command('p0', { c: 'buy', item: 'bagel', nonce: 'c' }).ok).toBe(true);
+    expect(sim.command('p0', { c: 'buy', item: 'bagel', nonce: 'c' }).reason).toBe('duplicate');
     expect(p.bag.length).toBe(1);
     p.bag = ['banana'];
-    expect(sim.command('p0', { c: 'buy', item: 'nutella', nonce: 'd' }).reason).toBe('bag full');
+    expect(sim.command('p0', { c: 'buy', item: 'bagel', nonce: 'd' }).reason).toBe('bag full');
     sim.command('p0', { c: 'leave' });
     expect(p.st).toBe('idle');
     p.bag = [];
-    expect(sim.command('p0', { c: 'buy', item: 'nutella', nonce: 'e' }).reason).toBe('not in a shop');
+    expect(sim.command('p0', { c: 'buy', item: 'bagel', nonce: 'e' }).reason).toBe('not in a shop');
   });
   it('the shopper cannot be hurt and enemies ignore them', () => {
     const { sim, ps: [p] } = inShop();

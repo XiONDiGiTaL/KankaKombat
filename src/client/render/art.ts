@@ -669,12 +669,25 @@ export function propFrame(name: string, frame: number, flip = false): PropFrame 
   return { img: flip ? p.flipped : p.img, sx: i * cw, sy: 0, w: cw, h: ch };
 }
 
-/** Draw an imported item icon at a size that is not a whole multiple of its tile. */
+/** True when the item sheet actually carries a tile for `id`. Shop meals are added to the
+ *  catalog before their icons arrive, and a row without art is better than a wrong icon. */
+export function hasItemArt(id: string): boolean {
+  return itemTiles.has(id);
+}
+
+/** Draw an item icon at a size that is not a whole multiple of its tile. An icon the sheet
+ *  has not shipped yet draws as a blank cream chip, so the shop menu and the bag keep their
+ *  layout instead of showing the debris fallback. */
 export function drawItem(c: CanvasRenderingContext2D, id: string, x: number, y: number, w: number, h: number): void {
-  const a = artCanvas(id);
   const was = c.imageSmoothingEnabled;
   c.imageSmoothingEnabled = true;
-  c.drawImage(a, x, y, w, h);
+  const a = itemTiles.get(id);
+  if (a) c.drawImage(a, x, y, w, h);
+  else {
+    c.fillStyle = '#1a1220'; c.fillRect(x, y, w, h);
+    c.fillStyle = '#f6e8b8'; c.fillRect(x + 1, y + 1, w - 2, h - 2);
+    c.fillStyle = '#c8a878'; c.fillRect(x + 1, y + h - 2, w - 2, 1);
+  }
   c.imageSmoothingEnabled = was;
 }
 

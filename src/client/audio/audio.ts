@@ -4,7 +4,7 @@
 // a file cannot be fetched and for the short victory sting.
 
 import { loadSettings, saveSettings } from '../settings';
-import { MUSIC_DIR, THEMES, type ThemeId } from '../../shared/data/music';
+import { THEMES, musicUrl, type ThemeId } from '../../shared/data/music';
 
 type Voice = 'square' | 'triangle' | 'sawtooth' | 'sine';
 interface Track { bpm: number; lead: string; bass: string; drums: string; harm?: string; leadVoice?: Voice; swing?: number }
@@ -61,7 +61,7 @@ const TRACKS: Record<string, Track> = {
 
 /** One theme per city (named after the chapter's `music` id) and the title theme. */
 const MUSIC_FILES: Record<string, string> = Object.fromEntries(
-  Object.entries(THEMES).map(([id, t]) => [id, MUSIC_DIR + t.file]),
+  (Object.keys(THEMES) as ThemeId[]).map((id) => [id, musicUrl(id)]),
 );
 
 /** Synth-only ids: the chiptune menu loop used as the title fallback and the victory sting. */

@@ -1,7 +1,8 @@
 // One-pass check of the live GitHub Pages build behind the xiondigital.net domain:
 //   1. the legacy /KankaKombat/ path answers a real 301 to /kankakombat/
 //   2. hashed assets carry an edge cache policy (and are served by Cloudflare at all)
-//   3. the deployed fighter select renders both fighters with no console errors or 404s
+//   3. the deployed fighter select renders the hero card, its two peeks and the four-tab
+//      roster rail, steps between fighters, and loads with no console errors or 404s
 //
 // Usage: npm run verify:live [-- --url https://xiondigital.net/kankakombat/] [--keep-open]
 // Exits 1 when any check fails, so CI (or a pre-ship ritual) can gate on it.
@@ -121,41 +122,60 @@ async function checkSelect() {
     await page.waitForSelector('#select.show', { timeout: 45_000 });
     await page.waitForTimeout(1200);
 
+    // the select is one hero card cycled by the peeks and the name rail: check the card is
+    // painted, the two peeks are painted, the rail marks one current fighter - and that
+    // stepping right really lands on a different fighter.
     const info = await page.evaluate(() => {
-      const cards = [...document.querySelectorAll('#cards .card')].map((card) => {
-        const cv = card.querySelector('canvas');
-        const box = cv?.getBoundingClientRect();
-        let variance = 0;
-        if (cv instanceof HTMLCanvasElement) {
-          const ctx = cv.getContext('2d');
-          const data = ctx?.getImageData(0, 0, cv.width, cv.height).data ?? new Uint8Array();
-          const seen = new Set();
-          for (let i = 0; i < data.length; i += 4 * 37) seen.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
-          variance = seen.size;
-        }
-        return {
-          fighter: card.dataset.f ?? '',
-          title: card.querySelector('h3')?.textContent ?? '',
-          canvas: cv instanceof HTMLCanvasElement ? { w: cv.width, h: cv.height, cssW: Math.round(box?.width ?? 0) } : null,
-          colours: variance,
-        };
+      const colours = (cv) => {
+        if (!(cv instanceof HTMLCanvasElement)) return 0;
+        const data = cv.getContext('2d')?.getImageData(0, 0, cv.width, cv.height).data ?? new Uint8Array();
+        const seen = new Set();
+        for (let i = 0; i < data.length; i += 4 * 37) seen.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+        return seen.size;
+      };
+      const card = document.querySelector('#cards .card');
+      const cv = card?.querySelector('canvas');
+      const peeks = ['peek-prev', 'peek-next'].map((id) => {
+        const el = document.getElementById(id);
+        const pcv = el?.querySelector('canvas');
+        return { fighter: el?.dataset.f ?? '', colours: colours(pcv), cssW: Math.round(pcv?.getBoundingClientRect().width ?? 0) };
       });
-      return { cards, shown: document.querySelector('.screen.show')?.id ?? '', title: document.title };
+      return {
+        card: {
+          fighter: card?.dataset.f ?? '',
+          name: card?.querySelector('h3')?.textContent ?? '',
+          canvas: cv instanceof HTMLCanvasElement ? { w: cv.width, h: cv.height } : null,
+          colours: colours(cv),
+        },
+        peeks,
+        tabs: document.querySelectorAll('#rail .rtab').length,
+        active: document.querySelectorAll('#rail .rtab.on').length,
+        shown: document.querySelector('.screen.show')?.id ?? '',
+        title: document.title,
+      };
     });
+    const before = info.card.fighter;
+    await page.click('#peek-next');
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => document.querySelector('#cards .card')?.dataset.f ?? '');
 
-    const both = info.cards.length === 2;
-    const rendered = both && info.cards.every((c) => c.canvas && c.canvas.w >= 100 && c.canvas.h >= 100 && c.colours > 8);
-    const distinct = new Set(info.cards.map((c) => c.fighter)).size === info.cards.length;
+    const rendered = !!info.card.canvas && info.card.canvas.w >= 100 && info.card.canvas.h >= 100 && info.card.colours > 8;
+    const peeks = info.peeks.every((p) => p.fighter && p.colours > 4);
+    const rail = info.tabs === 4 && info.active === 1;
+    const cycles = !!before && !!after && after !== before;
 
     await page.screenshot({ path: SHOT });
     const detail = [
-      `screen=${info.shown} cards=${info.cards.map((c) => `${c.fighter || '?'} ${c.canvas ? `${c.canvas.w}x${c.canvas.h}` : 'no canvas'} / ${c.colours} colours`).join(', ') || 'none'}`,
+      `screen=${info.shown} card=${info.card.fighter || '?'} ${info.card.name || '(no name)'} ` +
+        `${info.card.canvas ? `${info.card.canvas.w}x${info.card.canvas.h}` : 'no canvas'} / ${info.card.colours} colours`,
+      `peeks=${info.peeks.map((p) => `${p.fighter || '?'} ${p.colours} colours`).join(', ') || 'none'} ` +
+        `rail=${info.tabs} tabs, ${info.active} current; step right: ${before || '?'} -> ${after || '?'}`,
       `screenshot: ${SHOT}`,
       errors.length ? `console errors: ${errors.slice(0, 4).join(' | ')}` : '',
       failed.length ? `failed requests: ${failed.slice(0, 4).join(' | ')}` : '',
     ].filter(Boolean).join('\n      ');
 
-    record('live fighter select', both && rendered && distinct && errors.length === 0 && failed.length === 0, detail);
+    record('live fighter select', rendered && peeks && rail && cycles && errors.length === 0 && failed.length === 0, detail);
     if (KEEP_OPEN) await page.pause();
   } catch (err) {
     record('live fighter select', false, err.message.split('\n').slice(0, 3).join(' | '));

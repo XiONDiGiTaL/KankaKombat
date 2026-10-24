@@ -4,8 +4,17 @@
 //  2. Relay (host-authoritative, the GitHub Pages deployment model): street fight, shop
 //     purchase validated by the host, disconnect + reconnect with the same token.
 import { test, expect, Page, Browser } from '@playwright/test';
+import { CHAPTERS } from '../src/shared/data/stages';
 
 const WS = 'ws://localhost:8799';
+
+// The tests walk the real New York street, so the anchors come from the shipped section
+// rather than from numbers copied when the street was shorter: the bodega it shops at, the
+// camera position the second wave locks to, and the index of the boss arena at the end.
+const NY_STREET = CHAPTERS[0].sections[0];
+const NY_BOSS = CHAPTERS[0].sections.length - 1;
+const BODEGA_X = NY_STREET.shops.find((s) => s.shop === 'bodega')!.x;
+const SECOND_WAVE_X = NY_STREET.waves[1].at;
 
 interface Snapshot { phase: string; chapter: number; section: number; bossHp: number | null; players: { pid: string; money: number; bag: string[]; lives: number }[]; enemies: number; camX: number; lockX: number | null; me: { x: number; z: number; st: string } | null }
 
@@ -79,7 +88,10 @@ test('dedicated server: two browsers join a lobby and defeat a boss together', a
   // both clients are in the same boss arena with both players
   const a0 = await waitFor(A.page, (s) => s.phase === 'boss');
   const b0 = await waitFor(B.page, (s) => s.phase === 'boss');
-  expect(a0.section).toBe(2); expect(b0.section).toBe(2);
+  expect(a0.section, 'the last section of the chapter is the boss arena').toBe(NY_BOSS);
+  expect(b0.section).toBe(a0.section);
+  expect(a0.chapter).toBe(0); expect(b0.chapter).toBe(0);
+  expect(a0.bossHp, 'the boss is on the field').not.toBeNull();
   expect(a0.players.length).toBe(2); expect(b0.players.length).toBe(2);
   expect(a0.players.map((p) => p.pid).sort()).toEqual(b0.players.map((p) => p.pid).sort());
 
@@ -102,14 +114,17 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   const B = await open(browser, `${q}&room=${code}`);
   await joinAndStart(A.page, B.page);
 
-  // fight through the first two waves together
-  await waitFor(A.page, (s) => s.phase === 'play' && s.camX >= 480 && s.lockX === null && s.enemies === 0, 200_000);
+  // fight through the first two waves together. Wait for the second wave's lock to be lifted:
+  // a shop only opens on a free camera, and stopping at the wave's own x proves it is cleared
+  // instead of racing the moment just before it spawns.
+  await waitFor(A.page, (s) => s.phase === 'play' && s.lockX === null && s.enemies === 0 && s.camX >= SECOND_WAVE_X, 200_000);
   const s1 = (await state(A.page))!;
   const g1 = (await state(B.page))!;
   for (const p of s1.players) expect(g1.players.find((x) => x.pid === p.pid)!.money).toBe(p.money);
   expect(s1.players.reduce((n, p) => n + p.money, 0)).toBeGreaterThan(0);
 
-  // the guest takes over its controls and walks into the bodega at x=620
+  // the guest takes over its controls and walks into the bodega (no third wave yet: it starts
+  // further down the street, so the walk to the shop stays in the open stretch)
   await B.page.evaluate(() => { (window as any).__kk.autopilot = null; });
   await A.page.evaluate(() => { (window as any).__kk.autopilot = null; });
   const keys: Record<string, string> = { L: 'ArrowLeft', R: 'ArrowRight', U: 'ArrowUp', D: 'ArrowDown' };
@@ -118,7 +133,7 @@ test('relay (host-authoritative): street fight, a host-validated purchase, disco
   while (!inShop && Date.now() - t0 < 60_000) {
     const s = (await state(B.page))!;
     if (!s.me) { await B.page.waitForTimeout(200); continue; }
-    const dx = 707 - s.me.x, dz = 4 - s.me.z;
+    const dx = BODEGA_X - s.me.x, dz = 4 - s.me.z;
     if (Math.abs(dx) < 14 && Math.abs(dz) < 8 && ['idle', 'walk', 'run'].includes(s.me.st)) {
       await B.page.keyboard.press('KeyS');
       inShop = await B.page.waitForFunction(() => (window as any).__kk.screen === 'shop', null, { timeout: 2_000 }).then(() => true, () => false);

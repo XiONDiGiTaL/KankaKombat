@@ -1,7 +1,6 @@
-// Playable protagonists. Two heroes are on the menu from the start; two are secrets.
-// B.T. is the fast combo fighter, S.C. the power grappler. Ozzi and Aynur only appear
-// when the fighter select screen is asked for them (Up on B.T. / S.C.), so they stay
-// off the card row until then.
+// Playable protagonists. All four stand on the select screen from the start and are cycled
+// left and right, one hero card at a time. B.T. is the fast combo fighter, S.C. the power
+// grappler, Ozzi the tank and Aynur the hold specialist.
 
 export interface FighterDef {
   id: 'bt' | 'sc' | 'ozzi' | 'aynur';
@@ -21,8 +20,6 @@ export interface FighterDef {
   throwSpeed: number; throwDamage: number;
   dodgeTicks: number; dodgeInvuln: number; dodgeSpeed: number;
   stats: { power: number; speed: number; grapple: number; toughness: number };
-  secret?: boolean;         // not drawn on the select screen until revealed
-  unlockFrom?: 'bt' | 'sc'; // the card that reveals this fighter when it is asked for more
 }
 
 export const FIGHTER_IDS = ['bt', 'sc', 'ozzi', 'aynur'] as const;
@@ -58,7 +55,6 @@ export const FIGHTERS: Record<FighterId, FighterDef> = {
     grabRange: 30, grabHold: 130, throwSpeed: 4.7, throwDamage: 17,
     dodgeTicks: 14, dodgeInvuln: 12, dodgeSpeed: 3.8,
     stats: { power: 3, speed: 4, grapple: 3, toughness: 5 },
-    secret: true, unlockFrom: 'sc',
   },
   // Aynur is the grappler's answer to S.C.: her strikes are the shortest in the roster, but
   // once she has you the hold lasts and each LIGHT lands another slap - five before the
@@ -71,14 +67,5 @@ export const FIGHTERS: Record<FighterId, FighterDef> = {
     grabRange: 32, grabHold: 240, grabHits: 5, grabFinisher: 12, throwSpeed: 4.1, throwDamage: 17,
     dodgeTicks: 18, dodgeInvuln: 12, dodgeSpeed: 3.2,
     stats: { power: 3, speed: 3, grapple: 5, toughness: 2 },
-    secret: true, unlockFrom: 'bt',
   },
 };
-
-/** The fighters a fresh select screen shows, in card order. */
-export const STARTER_IDS: FighterId[] = FIGHTER_IDS.filter((id) => !FIGHTERS[id].secret);
-
-/** The hidden fighter a card reveals, keyed by the card it hides behind. */
-export const SECRET_OF: Partial<Record<FighterId, FighterId>> = Object.fromEntries(
-  FIGHTER_IDS.filter((id) => FIGHTERS[id].secret).map((id) => [FIGHTERS[id].unlockFrom!, id]),
-) as Partial<Record<FighterId, FighterId>>;

@@ -1,5 +1,12 @@
 // River City Ransom pattern: every stage has one enterable storefront and one street
 // vendor booth. Both open the same cream menu; the vendor just does it as an overlay.
+//
+// Stock is the shop's identity, not a shared shelf. Shops sell the food of their own place
+// and never the street-drop ladder (ayran, bananas, lahmacun, baklava, sucuk, Nutella):
+// a bodega sells bagels, patties, knish and the Bronx hero, a simit cart sells çay and
+// simit, Lupe's counter sells tortillas and pastor. Sit-down shops carry one $150 FULL
+// restore as their signature; street vendors are cheaper and never reach FULL. Six rows is
+// the menu's limit, and each list is ordered cheapest first.
 
 import { ItemId } from './items';
 
@@ -15,43 +22,50 @@ export interface ShopDef {
   stock: ItemId[];
 }
 
-const ALL: ItemId[] = ['ayran', 'banana', 'lahmacun', 'baklava', 'sujuk', 'nutella'];
-
 export const SHOPS: Record<string, ShopDef> = {
   bodega: {
     id: 'bodega', name: 'BODEGA', tagline: 'OPEN 24/7 · COLD DRINKS', style: 'ny', venue: 'store',
-    keeper: 'Manny', keeperLine: "WELCOME! WHAT'LL IT BE?", stock: ALL,
+    keeper: 'Marcos', keeperLine: "What's good, papi? Chopped cheese is hot.",
+    stock: ['bagel', 'plantain', 'patty', 'knish', 'choppedcheese', 'bronxhero'],
   },
   newsstand: {
     id: 'newsstand', name: 'NEWSSTAND', tagline: 'PAPERS · CANDY · METROCARD', style: 'ny', venue: 'store',
-    keeper: 'Dee', keeperLine: 'Mind the doors, kanka. What do you need?', stock: ALL,
+    keeper: 'Dee', keeperLine: 'Bagel and chips, baby? Mind the doors.',
+    stock: ['bagel', 'plantain', 'knish'],
   },
   hotdog: {
     id: 'hotdog', name: 'HOT DOG CART', tagline: 'SABRETT · DIRTY WATER · ICE COLD', style: 'ny', venue: 'vendor',
-    keeper: 'Sal', keeperLine: 'Hey! Best cart on the block.', stock: ALL,
+    keeper: 'Sal', keeperLine: "Best cart on the block, buddy. Knish's warm.",
+    stock: ['plantain', 'patty', 'knish'],
   },
   bakkal: {
     id: 'bakkal', name: 'BAKKAL', tagline: 'BAKKAL · ŞARKÜTERİ · 7/24', style: 'izmir', venue: 'store',
-    keeper: 'Nazmiye', keeperLine: 'Hoş geldin kanka! Ne alalım?', stock: ALL,
+    keeper: 'Hüsnü', keeperLine: 'Hoş geldin kanka! Simit taze, çay demli.',
+    stock: ['cay', 'simit', 'borek', 'lokum', 'dondurma', 'pide'],
   },
   simit: {
     id: 'simit', name: 'SİMİT CART', tagline: 'TAZE SİMİT · AÇIK HAVA', style: 'izmir', venue: 'vendor',
-    keeper: 'Hasan', keeperLine: 'Simit mi, ayran mı?', stock: ALL,
+    keeper: 'Hasan', keeperLine: 'Simit mi, çay mı, kanka? İkisi de taze.',
+    stock: ['cay', 'simit', 'borek'],
   },
   pazar: {
-    id: 'pazar', name: 'PAZAR', tagline: 'BAHARAT · BAKLİYAT · ÇAY', style: 'istanbul', venue: 'store',
-    keeper: 'Fehmi', keeperLine: 'Bir çay içmeden olmaz, buyur.', stock: ALL,
+    id: 'pazar', name: 'PAZAR', tagline: 'KESTANE · MISIR · TURŞU', style: 'istanbul', venue: 'vendor',
+    keeper: 'Kemal', keeperLine: 'Buyur kanka, midye taze, turşu soğuk.',
+    stock: ['tursu', 'kestane', 'misir', 'midye', 'nar', 'balikekmek'],
   },
   cay: {
     id: 'cay', name: 'ÇAY STAND', tagline: 'DEMLİ ÇAY · SICAK SİMİT', style: 'istanbul', venue: 'vendor',
-    keeper: 'Ayşe', keeperLine: 'Çayı demledim, ne alırsın?', stock: ALL,
+    keeper: 'Ayşe', keeperLine: 'Çayı demledim, canım. Lokum da taze.',
+    stock: ['cay', 'simit', 'lokum'],
   },
   tacos: {
-    id: 'tacos', name: 'TACOS', tagline: 'TACOS · LIMON · PLAYA', style: 'tampa', venue: 'store',
-    keeper: 'Lupe', keeperLine: 'Fresh tortillas, kanka!', stock: ALL,
+    id: 'tacos', name: 'TACOS', tagline: 'TACOS · LIMÓN · PLAYA', style: 'tampa', venue: 'store',
+    keeper: 'Lupe', keeperLine: '¡Fresh tortillas, kanka! Just made them.',
+    stock: ['tortilla', 'taco', 'quesadilla', 'elote', 'burrito', 'pastor'],
   },
   tacotruck: {
-    id: 'tacotruck', name: 'TACO TRUCK', tagline: 'TACOS – LIMON · ABIERTO', style: 'tampa', venue: 'vendor',
-    keeper: 'Rico', keeperLine: 'What can I get you, amigo?', stock: ALL,
+    id: 'tacotruck', name: 'TACO TRUCK', tagline: 'TACOS – LIMÓN · ABIERTO', style: 'tampa', venue: 'vendor',
+    keeper: 'Rico', keeperLine: '¡Órale! ¿Qué tal, carnal? Elote is off the grill.',
+    stock: ['tortilla', 'taco', 'quesadilla', 'elote'],
   },
 };

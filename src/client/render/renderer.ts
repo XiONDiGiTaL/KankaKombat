@@ -5,7 +5,7 @@ import { CHAPTERS, ShopSpot, sectionAt } from '../../shared/data/stages';
 import { ENEMIES } from '../../shared/data/enemies';
 import { FIGHTERS, type FighterId } from '../../shared/data/fighters';
 import { ATTACKS } from '../../shared/data/attacks';
-import { SHOPS, ShopStyle } from '../../shared/data/shops';
+import { SHOPS, ShopStyle, type ShopDef } from '../../shared/data/shops';
 import { ITEMS } from '../../shared/data/items';
 import { formatMoney } from '../../shared/data/currency';
 import { phaseOf } from '../../shared/sim/combat';
@@ -18,6 +18,7 @@ import { Combos } from './combo';
 import { frameFor, getSheet } from './sprites';
 import { npcAnchor, npcFrame } from './npcs';
 import { MIRRORED, paintedShop, stageFor, stageIdFor, type StageArt } from './stages';
+import { chalkLayout, keeperAtlasFor, keeperFrame, shopRoomFor, type ChalkBoard, type ShopRoom } from './shops';
 import { grabTarget, heldVictim } from '../grabReadiness';
 import type { Crowd } from '../ambient';
 import { t } from '../i18n';
@@ -37,6 +38,9 @@ export class Renderer {
   crowd: Crowd | null = null;
   shopSel = 0;
   shopMsg = '';
+  /** Frames spent in the shop since it opened, and the tail of a serve animation. */
+  private shopT = 0;
+  private shopServeT = 0;
   private tags = true;
 
   constructor() {
@@ -72,6 +76,7 @@ export class Renderer {
     this.frame++;
     this.tags = hud;
     if (hud && this.localEnt(v)?.st === 'shop') { this.drawShop(v); return; }
+    this.shopT = 0; this.shopServeT = 0;
     this.ensureBg(v);
     const sh = this.fx.shake > 0 ? Math.round((this.frame % 2 ? 1 : -1) * Math.min(3, this.fx.shake)) : 0;
     const cam = Math.round(v.camX);
@@ -212,7 +217,7 @@ export class Renderer {
     const me = this.localEnt(v);
     if (me && v.phase === 'play' && v.lockX === null && me.st !== 'shop') {
       const sec = sectionAt(v.chapter, v.section, v.training);
-      for (const s of sec.shops) if (Math.abs(me.x - s.x) < 24 && me.z < 16) this.prompt(sx(s.x), STREET_TOP - 44, 'GRAB: ENTER ' + SHOPS[s.shop].name.toUpperCase());
+      for (const s of sec.shops) if (Math.abs(me.x - s.x) < 24 && me.z < 16) this.prompt(sx(s.x), STREET_TOP - 44, 'GRAB: ENTER ' + SHOPS[s.shop].name);
     }
     if (me && (me.st === 'idle' || me.st === 'walk')) {
       const food = v.pickups.find((p) => p.kind === 'food' && Math.abs(p.x - me.x) < 18 && Math.abs(p.z - me.z) < 10);
@@ -348,7 +353,7 @@ export class Renderer {
     // boss bar
     const boss = v.ents.find((e) => e.id === v.bossId);
     if (boss && (v.phase === 'boss' || v.phase === 'bossintro')) {
-      const name = t(ENEMIES[boss.def]?.name ?? 'BOSS').toUpperCase();
+      const name = t(ENEMIES[boss.def]?.name ?? 'BOSS');
       c.fillStyle = 'rgba(26,18,32,0.85)'; c.fillRect(40, SCREEN_H - 16, SCREEN_W - 80, 14);
       drawText(c, name, 44, SCREEN_H - 14, '#f6e8b8', { shadow: null });
       const bx = 44 + textWidth(name) + 6, bw = SCREEN_W - 84 - (bx - 44) - 4;
@@ -438,8 +443,7 @@ export class Renderer {
     // bag
     const bx = x + w - 4 - p.bag.length * 9;
     p.bag.forEach((it, i) => {
-      const a = artCanvas(it);
-      c.save(); c.translate(bx + i * 9, 18); c.scale(0.5, 0.5); c.drawImage(a, 0, 0); c.restore();
+      drawItem(c, it, bx + i * 9, 18, 9, 9);
       if (i === p.sel && local) { c.fillStyle = '#f6e8b8'; c.fillRect(bx + i * 9, 27, 8, 1); }
     });
     if (p.powerT > 0) drawText(c, 'POW', x + 3, 26, '#f05a2a', { shadow: '#1a1220' });
@@ -452,13 +456,74 @@ export class Renderer {
    *  panel with icons, prices and a triangular cursor. Draws on the game canvas so the
    *  type stays the project's own bitmap fonts at 1:1 pixel density. */
   private drawShop(v: View): void {
-    const c = this.ctx;
     const me = this.localEnt(v);
     if (!me) return;
     const sec = sectionAt(v.chapter, v.section, v.training);
     const spot = sec.shops.find((s) => Math.abs(me.x - s.x) < 24) ?? sec.shops[0];
     const shop = SHOPS[spot?.shop ?? 'bodega'];
     const p = v.players.find((x) => x.id === me.id) ?? v.players[0];
+    this.shopT++;
+    if (this.shopServeT > 0) this.shopServeT--;
+    const room = shopRoomFor(shop.id);
+    if (room) this.drawPaintedShop(room, shop, p); else this.drawDrawnShop(shop, p);
+    this.drawShopMenu(shop, p, v);
+  }
+
+  /** A sale landed: the keeper reaches over the bar with the plate for a beat. */
+  shopServed(): void { this.shopServeT = 56; }
+
+  /** Lupe's counter: the room painted by tools/art/import_shop.py, her atlas already cut
+   *  at the bar's edge, and the local hero on the customer side of it. */
+  private drawPaintedShop(room: ShopRoom, shop: ShopDef, p: ViewPlayer): void {
+    const c = this.ctx;
+    c.drawImage(room.img, 0, 0);
+    if (room.board) this.drawChalkBoard(room.board, shop);
+    if (room.keeper) {
+      const k = room.keeper;
+      const f = keeperFrame(k, this.keeperAnim(), this.frame);
+      const [ax, ay] = k.anchor;
+      c.drawImage(f.img, f.sx, f.sy, f.w, f.h, Math.round(room.keeperX - ax), Math.round(room.counterY - ay), f.w, f.h);
+    }
+    const sheet = getSheet(p.fighter);
+    if (sheet) {
+      const [cw, ch] = sheet.atlas.cell;
+      const [ax, ay] = sheet.atlas.anchor;
+      const fi = sheet.atlas.anims.idle.frames[0].i;
+      c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(74, 119, 22, 2);
+      c.drawImage(sheet.img, (fi % sheet.atlas.cols) * cw, Math.floor(fi / sheet.atlas.cols) * ch, cw, ch, 85 - ax, 121 - ay, cw, ch);
+    }
+    // the room paints its own ABIERTO sign above her, so the bubble keeps to its left
+    this.drawShopSpeech(shop, 244);
+  }
+
+  /** The room's menu board, chalked in the game's own HUD glyphs at 1:1: the art ships a
+   *  blank slate, so the words are real text (folded, spelled, and never a painted
+   *  letterform that disagrees with the font), and the rows come from the shop's stock. */
+  private drawChalkBoard(b: ChalkBoard, shop: ShopDef): void {
+    const c = this.ctx;
+    const { header, rule, rows, nameX, priceX } = chalkLayout(b, shop);
+    c.fillStyle = '#8f8b6d';
+    c.fillRect(rule[0], rule[2], rule[1] - rule[0] + 1, 1);
+    const chalk = '#e9e0b6';
+    drawText(c, header.s, header.x, header.y, chalk, { align: 'center', shadow: null });
+    for (const r of rows) {
+      drawText(c, r.name, nameX, r.y, chalk, { shadow: null });
+      drawText(c, r.price, priceX, r.y, chalk, { align: 'right', shadow: null });
+    }
+  }
+
+  /** What the keeper is doing: a plate for a sale, a shrug when the wallet is short, a
+   *  welcome on the way in, otherwise the bust idling with her hands on the bar. */
+  private keeperAnim(): string {
+    if (this.shopServeT > 0) return 'serve';
+    if (this.shopMsg) return 'talk';
+    return this.shopT < 80 ? 'greet' : 'idle';
+  }
+
+  /** The drawn interior the other shops still use: flat pixel blocks in the city's own
+   *  colours, with a keeper behind a counter. */
+  private drawDrawnShop(shop: ShopDef, p: ViewPlayer): void {
+    const c = this.ctx;
     const R = (x: number, y: number, w: number, h: number, col: string) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
     const P = (x: number, y: number, col: string) => R(x, y, 1, 1, col);
     type Deco = { wall: string; wall2: string; shelf: string; floor: string; floor2: string; counter: string; counterHi: string; apron: string; shirt: string; hair: string };
@@ -511,17 +576,25 @@ export class Renderer {
     R(156, 122, 210, 4, INK);
     for (let x = 166; x < 360; x += 24) R(x, 108, 1, 13, '#00000030');
 
-    // ---- keeper behind the counter
+    // ---- keeper behind the counter: his own counter atlas when the drop shipped one
+    // (Marcos, Kemal), otherwise the block figure dressed in the city's colours.
     const kx = 250;
-    R(kx - 11, 82, 22, 16, d.shirt);
-    R(kx - 9, 98, 18, 8, d.apron);
-    R(kx - 11, 82, 22, 1, INK);
-    R(kx - 8, 68, 16, 15, '#e0a878'); R(kx - 9, 67, 18, 3, d.hair);
-    R(kx - 8, 70, 3, 3, d.hair); R(kx + 5, 70, 3, 3, d.hair);
-    P(kx - 3, 75, INK); P(kx + 3, 75, INK);
-    R(kx - 2, 79, 5, 1, '#7a3a2a');
-    R(kx - 13, 86, 3, 12, d.shirt); R(kx + 10, 86, 3, 10, d.shirt);
-    if (shop.style === 'izmir' || shop.style === 'istanbul') R(kx - 4, 77, 9, 1, '#2a1a14');
+    const k = keeperAtlasFor(shop.keeper);
+    if (k) {
+      const f = keeperFrame(k, this.keeperAnim(), this.frame);
+      const [ax, ay] = k.anchor;
+      c.drawImage(f.img, f.sx, f.sy, f.w, f.h, Math.round(kx - ax), Math.round(98 - ay), f.w, f.h);
+    } else {
+      R(kx - 11, 82, 22, 16, d.shirt);
+      R(kx - 9, 98, 18, 8, d.apron);
+      R(kx - 11, 82, 22, 1, INK);
+      R(kx - 8, 68, 16, 15, '#e0a878'); R(kx - 9, 67, 18, 3, d.hair);
+      R(kx - 8, 70, 3, 3, d.hair); R(kx + 5, 70, 3, 3, d.hair);
+      P(kx - 3, 75, INK); P(kx + 3, 75, INK);
+      R(kx - 2, 79, 5, 1, '#7a3a2a');
+      R(kx - 13, 86, 3, 12, d.shirt); R(kx + 10, 86, 3, 10, d.shirt);
+      if (shop.style === 'izmir' || shop.style === 'istanbul') R(kx - 4, 77, 9, 1, '#2a1a14');
+    }
 
     // ---- hero standing at the counter
     const sheet = getSheet(p.fighter);
@@ -532,27 +605,42 @@ export class Renderer {
     }
     // ground contact shadow
     c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(100, 123, 24, 3);
+    this.drawShopSpeech(shop);
+  }
 
-    // ---- speech bubble with the keeper's line
-    const line = `${t(shop.keeper).toUpperCase()}: ${t(shop.keeperLine).toUpperCase()}`;
-    const maxChars = 42;
+  /** The keeper's line in a cream bubble above the counter. `right` pins the bubble's right
+   *  edge, so a room with its own signage can keep the box out of the way. */
+  private drawShopSpeech(shop: ShopDef, right?: number): void {
+    const c = this.ctx;
+    const R = (x: number, y: number, w: number, h: number, col: string) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+    const INK = '#1a1220';
+    const line = `${t(shop.keeper)}: ${t(shop.keeperLine)}`;
+    const maxChars = right === undefined ? 42 : 30;
     const words = line.split(' ');
     const lines: string[] = []; let cur = '';
     for (const w of words) { if ((cur + ' ' + w).trim().length > maxChars) { lines.push(cur.trim()); cur = w; } else cur += ' ' + w; }
     if (cur.trim()) lines.push(cur.trim());
-    const bw = Math.min(280, Math.max(...lines.map((l) => textWidth(l))) + 12);
-    const bx = Math.round(250 - bw / 2), by = 6, bh = lines.length * 8 + 8;
+    const limit = right === undefined ? 280 : 200;
+    const bw = Math.min(limit, Math.max(...lines.map((l) => textWidth(l))) + 12);
+    const bx = right === undefined ? Math.round(250 - bw / 2) : right - bw;
+    const by = 6, bh = lines.length * 8 + 8;
     R(bx - 1, by - 1, bw + 2, bh + 2, INK); R(bx, by, bw, bh, '#f6e8b8');
-    R(bx + bw / 2 - 3, by + bh, 7, 4, INK); R(bx + bw / 2 - 2, by + bh, 5, 3, '#f6e8b8');
+    const tx = right === undefined ? bx + bw / 2 - 3 : bx + bw - 13;
+    R(tx, by + bh, 7, 4, INK); R(tx + 1, by + bh, 5, 3, '#f6e8b8');
     lines.forEach((l, i) => drawText(c, l, bx + 6, by + 4 + i * 8, '#2a1a14', { shadow: null }));
+  }
 
-    // ---- cream menu panel
+  /** The cream menu panel both shop scenes share: stock, prices, the cursor and the hint. */
+  private drawShopMenu(shop: ShopDef, p: ViewPlayer, v: View): void {
+    const c = this.ctx;
+    const R = (x: number, y: number, w: number, h: number, col: string) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+    const INK = '#1a1220';
     const top = 126;
     R(0, top, SCREEN_W, SCREEN_H - top, INK);
     R(2, top + 2, SCREEN_W - 4, SCREEN_H - top - 4, '#f6e8b8');
     R(2, top + 2, SCREEN_W - 4, 1, '#fffbe8');
     R(2, SCREEN_H - 4, SCREEN_W - 4, 2, '#c8a878');
-    drawText(c, t(shop.name).toUpperCase(), 7, top + 6, '#7a2a1a', { font: 'title', shadow: null });
+    drawText(c, t(shop.name), 7, top + 6, '#7a2a1a', { font: 'title', shadow: null });
     drawText(c, formatMoney(p.money, v.cur), SCREEN_W - 60, top + 6, '#2a5a2a', { align: 'right', shadow: null });
     drawText(c, `BAG ${p.bag.length}/${BAG_SLOTS}`, SCREEN_W - 7, top + 6, '#7a5a2a', { align: 'right', shadow: null });
     R(6, top + 17, SCREEN_W - 12, 1, '#c8a878');
@@ -570,8 +658,10 @@ export class Renderer {
       }
       drawItem(c, id, 17, y, 10, 10);
       const poor = p.money < dmg.price;
-      drawText(c, t(dmg.name).toUpperCase(), 30, y + 1, sel ? '#fff6d0' : poor ? '#a08070' : '#2a1a14', { shadow: null });
-      drawText(c, dmg.heal === Infinity ? t('FULL HP') : `+${dmg.heal} HP`, 118, y + 1, sel ? '#f0c8a0' : '#8a6a4a', { shadow: null });
+      drawText(c, t(dmg.name), 30, y + 1, sel ? '#fff6d0' : poor ? '#a08070' : '#2a1a14', { shadow: null });
+      // the heal column clears the longest shop name (HALAL CHICKEN OVER RICE) on the left
+      // and the right-aligned price on the right
+      drawText(c, dmg.heal === Infinity ? t('FULL HP') : `+${dmg.heal} HP`, 200, y + 1, sel ? '#f0c8a0' : '#8a6a4a', { shadow: null });
       drawText(c, formatMoney(dmg.price, v.cur), SCREEN_W - 9, y + 1, sel ? '#fff6d0' : poor ? '#a08070' : '#2a1a14', { align: 'right', shadow: null });
     });
     R(6, SCREEN_H - 11, SCREEN_W - 12, 1, '#c8a878');
@@ -603,7 +693,7 @@ export class Renderer {
     }
     switch (v.phase) {
       case 'intro':
-        if (v.phaseT < 110) banner(v.section === 0 ? [[t(ch.title).toUpperCase(), '#f0c818'], [`${t(ch.city).toUpperCase()}, ${t(ch.country).toUpperCase()}`, '#ffffff'], [t(sec.name).toUpperCase(), '#8ac8ff']] : [[t(sec.name).toUpperCase(), '#f0c818', 2]]);
+        if (v.phaseT < 110) banner(v.section === 0 ? [[t(ch.title), '#f0c818'], [`${t(ch.city)}, ${t(ch.country)}`, '#ffffff'], [t(sec.name), '#8ac8ff']] : [[t(sec.name), '#f0c818', 2]]);
         if (v.section === 0 && v.phaseT < 110) {
           const words = ch.intro.split(' '); const lines: string[] = []; let cur = '';
           for (const w of words) { if ((cur + ' ' + w).length > 56) { lines.push(cur.trim()); cur = w; } else cur += ' ' + w; }
@@ -614,7 +704,7 @@ export class Renderer {
       case 'bossintro': {
         const boss = v.ents.find((e) => e.id === v.bossId);
         const d = boss ? ENEMIES[boss.def] : undefined;
-        if (d?.boss && v.phaseT > 20) banner([[t('WARNING!'), this.frame % 16 < 8 ? '#f03a3a' : '#f0c818', 2], [t(d.name).toUpperCase(), '#ffffff'], [t(d.boss.title).toUpperCase(), '#8ac8ff'], [`"${t(d.boss.intro)}"`, '#f6e8b8']]);
+        if (d?.boss && v.phaseT > 20) banner([[t('WARNING!'), this.frame % 16 < 8 ? '#f03a3a' : '#f0c818', 2], [t(d.name), '#ffffff'], [t(d.boss.title), '#8ac8ff'], [`"${t(d.boss.intro)}"`, '#f6e8b8']]);
         break;
       }
       case 'clear': banner([[t('SECTION CLEAR!'), '#f0c818', 2]], 0.6); break;
@@ -625,8 +715,8 @@ export class Renderer {
         break;
       }
       case 'chapterclear': {
-        const lines: [string, string, number?][] = [[`${t(ch.city).toUpperCase()} CLEARED!`, '#f0c818', 2]];
-        for (const p of v.players) lines.push([`P${p.slot + 1} ${p.name.toUpperCase()}  LV${p.lvl}  ${formatMoney(p.money, v.cur)}  ×${p.lives}`, SLOT_COLORS[p.slot]]);
+        const lines: [string, string, number?][] = [[`${t(ch.city)} CLEARED!`, '#f0c818', 2]];
+        for (const p of v.players) lines.push([`P${p.slot + 1} ${p.name}  LV${p.lvl}  ${formatMoney(p.money, v.cur)}  ×${p.lives}`, SLOT_COLORS[p.slot]]);
         lines.push([t('ONE WALLET, ALL STREETS — CASH CARRIES OVER'), '#8ac8ff']);
         lines.push([t('ALL HEALTH RESTORED'), '#4ad06a']);
         if (v.phaseT > 90 && this.frame % 40 < 28) lines.push([t('PRESS START (ENTER) TO CONTINUE'), '#ffffff']);

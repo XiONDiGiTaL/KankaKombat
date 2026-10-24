@@ -6,7 +6,9 @@ down to the game's pixel density and snapped onto one shared palette, which lets
 sit next to the hand-authored pixel art without shouting.
 
 * food icons (assets/source/items.png): a 3x2 grid of items on flat blue, each with a
-  printed caption and a sparkle. The caption and the sparkle are separate blobs from
+  printed caption and a sparkle. The six drops are the first tiles of the atlas;
+  `assets/source/shops/shop_items_sheet.png` adds the 24 shop meals (6x4, transparent,
+  no captions) after them, so the whole catalog is one id-keyed strip. The caption and the sparkle are separate blobs from
   the food, so only the item's own blobs are kept - the largest one plus anything at
   least a quarter of its size (the splash over the Ayran).
 * golf cart (assets/source/golfcart.png): four side-on frames of the Tampa Man driving.
@@ -41,6 +43,25 @@ CART_PALETTE = 32
 ITEMS = ["lahmacun", "ayran", "nutella", "banana", "baklava", "sujuk"]
 GRID = (3, 2)
 
+# The shop meals ship as their own page (assets/source/shops/shop_items_sheet.png): 24
+# transparent icons in a 6x4 grid, no captions. They are appended after the six drops so
+# the whole catalog is one 18px atlas. The page order is NOT the design table's order
+# (row 3 draws simit before cay, row 4 draws kestane and misir before tursu suyu), so the
+# ids below are mapped by what each icon actually shows.
+SHOP_SRC = os.path.join(SRC, "shops", "shop_items_sheet.png")
+SHOP_GRID = (6, 4)
+SHOP_COLORS = 96       # the sheet is already limited-palette digital art; 40 collapsed 24 icons onto one brown ramp
+SHOP_IDS = [
+    # row 1 - Tampa
+    "tortilla", "taco", "quesadilla", "elote", "burrito", "pastor",
+    # row 2 - New York
+    "bagel", "patty", "knish", "plantain", "choppedcheese", "bronxhero",
+    # row 3 - Izmir
+    "simit", "cay", "borek", "lokum", "dondurma", "pide",
+    # row 4 - Istanbul
+    "kestane", "misir", "tursu", "midye", "nar", "balikekmek",
+]
+
 
 def fit(img: np.ndarray, box: int, inset: int) -> np.ndarray:
     """Scale a premultiplied crop into a box x box tile, centred and bottom aligned."""
@@ -51,6 +72,25 @@ def fit(img: np.ndarray, box: int, inset: int) -> np.ndarray:
     oy = box - small.shape[0] - inset
     tile[oy:oy + small.shape[0], ox:ox + small.shape[1]] = small
     return tile
+
+
+def shop_tiles() -> list[np.ndarray]:
+    """Cut the 24 shop-meal icons into the same 18px tile the drops use."""
+    page = np.asarray(Image.open(SHOP_SRC).convert("RGBA")).astype(np.float32)
+    cw, ch = page.shape[1] / SHOP_GRID[0], page.shape[0] / SHOP_GRID[1]
+    tiles = []
+    for row in range(SHOP_GRID[1]):
+        for col in range(SHOP_GRID[0]):
+            cell = page[int(row * ch):int((row + 1) * ch), int(col * cw):int((col + 1) * cw)]
+            ys, xs = np.where(cell[..., 3] > 16)
+            if len(xs) == 0:
+                raise SystemExit("shopitems: empty cell")
+            crop = cell[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+            premul = np.concatenate([crop[..., :3] * crop[..., 3:4] / 255.0, crop[..., 3:4]], axis=2)
+            tiles.append(fit(premul, ITEM_TILE, ITEM_INSET))
+    if len(tiles) != len(SHOP_IDS):
+        raise SystemExit(f"shopitems: {len(tiles)} cells for {len(SHOP_IDS)} ids")
+    return tiles
 
 
 def items() -> None:
@@ -81,7 +121,8 @@ def items() -> None:
             premul = np.concatenate([crop * a[..., None], a[..., None] * 255.0], axis=2)
             tiles.append(fit(premul, ITEM_TILE, ITEM_INSET))
 
-    tiles = crisp(tiles, colors=24)
+    tiles = crisp(tiles, colors=24) + crisp(shop_tiles(), colors=SHOP_COLORS)
+    ids = ITEMS + SHOP_IDS
     sheet = np.zeros((ITEM_TILE, ITEM_TILE * len(tiles), 4), np.float32)
     for i, t in enumerate(tiles):
         sheet[:, i * ITEM_TILE:(i + 1) * ITEM_TILE] = t
@@ -90,8 +131,8 @@ def items() -> None:
     os.makedirs(OUT, exist_ok=True)
     Image.fromarray(rgba, "RGBA").save(os.path.join(OUT, "items.png"), optimize=True)
     with open(os.path.join(OUT, "items.json"), "w", encoding="utf-8") as fh:
-        json.dump({"cell": [ITEM_TILE, ITEM_TILE], "ids": ITEMS}, fh, separators=(",", ":"))
-    print(f"items: {len(tiles)} icons in {ITEM_TILE}x{ITEM_TILE}")
+        json.dump({"cell": [ITEM_TILE, ITEM_TILE], "ids": ids}, fh, separators=(",", ":"))
+    print(f"items: {len(ids)} icons ({len(ITEMS)} drops + {len(SHOP_IDS)} shop meals) in {ITEM_TILE}x{ITEM_TILE}")
 
 
 def golfcart() -> None:

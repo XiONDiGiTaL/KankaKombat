@@ -16,7 +16,9 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: #0e0a14; color: var(--cream); overflow: hidden; overscroll-behavior: none; }
-body { font-family: 'Kanka HUD', monospace; font-size: 10px; line-height: 1.8; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; }
+/* the webfonts are uppercase-only; the CSS fold is what makes Turkish i → İ in DOM copy,
+   because the browser applies it with the document's lang (en/tr) */
+body { font-family: 'Kanka HUD', monospace; font-size: 10px; line-height: 1.8; text-transform: uppercase; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; }
 #app { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
 #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 #bezel { position: relative; display: block; line-height: 0; }
@@ -82,19 +84,28 @@ input[type=range] { accent-color: var(--gold); width: 200px; }
 .bar { height: 14px; border: 2px solid var(--ink); background: #3a2a4a; box-shadow: 0 0 0 2px #5a4a70; }
 #loadbar { height: 100%; width: 0; background: var(--gold); }
 
-.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.card { background: var(--panel2); border: 3px solid var(--ink); box-shadow: 0 0 0 2px #5a4a70; padding: 10px; cursor: pointer; display: flex; gap: 10px; align-items: stretch; }
+/* Fighter select: one hero card between two peek tiles. The card shows the fighter the
+   roster is on and that fighter is the pick; LEFT/RIGHT, the peeks or the name rail cycle. */
+.roster { display: grid; grid-template-columns: 104px minmax(0, 1fr) 104px; gap: 10px; align-items: stretch; }
+.cards { display: block; }
+.peek { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 6px; background: #1b1426; border: 2px solid var(--ink); cursor: pointer; opacity: .6; }
+.peek:hover, .peek:focus-visible { opacity: 1; outline: none; box-shadow: inset 0 0 0 2px #6a5a86, 0 0 0 2px var(--gold); }
+.peek::before { content: none !important; }
+.peek .arw { color: var(--gold); font-size: 9px; line-height: 1; }
+.peek canvas { width: 84px; height: 108px; border: 2px solid var(--ink); background: #241a34; image-rendering: pixelated; }
+.peek .nm { font-size: 8px; letter-spacing: 1px; color: var(--muted); }
+.peek:hover .nm { color: var(--gold); }
+.rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.rail .rtab { text-align: center; padding: 6px 4px; font-size: 9px; letter-spacing: 1px; opacity: .6; }
+.rail .rtab::before { content: none !important; }
+.rail .rtab:hover, .rail .rtab:focus-visible { opacity: 1; color: var(--gold); }
+.rail .rtab.on { opacity: 1; color: var(--gold); }
+.card { background: var(--panel2); border: 3px solid var(--ink); padding: 12px; cursor: default; display: flex; gap: 14px; align-items: stretch; }
 .card > div { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.card.on { box-shadow: 0 0 0 3px var(--gold); background: #3a2a52; }
-/* A hidden fighter, revealed: gold frame and a tag so it reads as a discovery. */
-.card.secret { background: linear-gradient(180deg, #4a3160, #2a1c3e); }
-.card.secret h3 { color: #ffe066; }
-.card .tag { font-size: 7px; letter-spacing: 1px; color: var(--ink); background: var(--gold); padding: 1px 4px; margin-left: 4px; vertical-align: 2px; }
-.secret-hint { font-size: 7px; letter-spacing: .5px; color: #d3b8ff; margin: 0 0 4px; cursor: pointer; }
-.secret-hint:hover { color: #ffe066; }
-.card canvas { width: 128px; height: auto; min-height: 172px; border: 2px solid var(--ink); background: #241a34; image-rendering: pixelated; flex: none; align-self: stretch; }
-.card h3 { margin: 0 0 6px; font-size: 14px; color: var(--gold); }
-.card p { font-size: 8px; color: var(--muted); line-height: 1.8; margin: 4px 0; }
+.card.on { background: #3a2a52; }
+.card canvas { width: 190px; height: 226px; border: 2px solid var(--ink); background: #241a34; image-rendering: pixelated; flex: none; }
+.card h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: 2px; color: var(--gold); }
+.card p { font-size: 9px; color: var(--muted); line-height: 1.9; margin: 4px 0; }
 /* Stat block. One grid row per stat: the labels share an auto column and the tracks fill
    the rest, so both fighters get identical track widths (same labels, same card
    width). The empty part of a track stays visible, split into five segments, so the
@@ -102,10 +113,15 @@ input[type=range] { accent-color: var(--gold); width: 200px; }
    so it can explain itself on hover, focus or tap without picking the fighter. */
 .stats { display: grid; row-gap: 4px; margin-top: auto; padding-top: 8px; font-size: 8px; }
 .stats .stat { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: center; width: 100%; margin: 0; padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: help; color: inherit; }
+/* the global button hover arrow is a generated box, which a grid row would place as an
+   extra item and shove the label and track out of their columns */
+.stats .stat::before { content: none !important; }
 .stats .stat:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 .stats .stat:hover .sl, .stats .stat:focus-visible .sl { color: var(--gold); }
 .stats .sl { white-space: nowrap; color: var(--cream); }
 .stats .track { position: relative; height: 7px; max-width: 180px; background: #5a5268; box-shadow: inset 0 0 0 1px #171122, inset 0 1px 0 rgba(255, 255, 255, .10); }
+/* the wide hero card has room for the full five-segment track, so the bars run edge to edge */
+.card .stats .track { max-width: none; }
 .stats .track::after { content: ''; position: absolute; inset: 0; z-index: 2; background: repeating-linear-gradient(90deg, rgba(14, 10, 20, 0) 0 calc(20% - 1px), #241a34 calc(20% - 1px) 20%); }
 .stats .track b { position: absolute; inset: 0 auto 0 0; width: calc(var(--v) / 5 * 100%); background: linear-gradient(180deg, #ffe066 0%, #f0c818 55%, #c08e10 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .40); }
 /* One tooltip for the whole select screen, on the body so it can hang over the panel
@@ -130,6 +146,7 @@ table.keys td, table.food td { padding: 4px 4px; border-bottom: 1px solid #3a2a4
 .kbd.wait { background: var(--gold); }
 .tips { padding-left: 14px; font-size: 8px; line-height: 2; color: var(--cream); }
 .food canvas { width: 26px; height: 26px; image-rendering: pixelated; }
+.food .grp td { padding-top: 10px; color: var(--gold); letter-spacing: 1px; border-bottom-color: var(--gold); }
 
 .shop { max-width: 480px; }
 .shoplist { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }
@@ -166,8 +183,10 @@ table.keys td, table.food td { padding: 4px 4px; border-bottom: 1px solid #3a2a4
 
 @media (max-width: 720px) {
   body { font-size: 10px; }
-  .cards, .cols { grid-template-columns: 1fr; }
-  .card canvas { width: 128px; height: auto; }
+  .cols { grid-template-columns: 1fr; }
+  .roster { grid-template-columns: minmax(0, 1fr); }
+  .peek { display: none; }
+  .card canvas { width: 118px; height: 150px; }
   .panel { padding: 14px; }
   h2 { font-size: 13px; }
 }
