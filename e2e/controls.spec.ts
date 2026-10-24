@@ -113,6 +113,28 @@ async function settled(page: Page): Promise<void> {
   await bodyIs(page, ['idle', 'walk', 'run'], 3_000);
 }
 
+/** The dummy back on its mark and out of the invulnerable window the respawn grants it.
+ *  Swinging during that window looks identical on screen but lands nothing, so the combo
+ *  count would stay at zero. */
+async function dummyReady(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const d = (window as any).__kk.client.latest().ents.find((e: any) => e.def === 'dummy');
+    return !!d && d.st === 'idle' && Math.abs(d.x - 300) < 1 && (d.flags & 1) === 0;
+  }, null, { timeout: 12_000 });
+}
+
+/** The HUD chain counter, waited for rather than sampled once: the count only exists from
+ *  the second landed hit, and the window is a second long. */
+async function chainAtLeast(page: Page, n: number): Promise<number> {
+  await page.waitForFunction((want) => {
+    const kk = (window as any).__kk;
+    const v = kk.client.latest();
+    const me = v.players.find((p: any) => p.pid === kk.client.myId);
+    return (kk.renderer.combos.get(me?.id)?.n ?? 0) >= (want as number);
+  }, n, { timeout: 2_000 });
+  return ((await look(page))?.chain ?? 0);
+}
+
 test('keyboard: jump, dodge and block answer on their shipped keys', async ({ page }) => {
   const errors = watch(page);
   await page.goto('/?debug=1');
@@ -161,11 +183,7 @@ test('keyboard: walk in, grab, throw and chain the light combo on the practice d
   expect(thrown.dummyX, 'the throw moved the dummy off its mark').not.toBe(300);
 
   // it stands back up on its mark, which is where the combo is landed
-  await page.waitForFunction(() => {
-    const v = (window as any).__kk.client.latest();
-    const d = v.ents.find((e: any) => e.def === 'dummy');
-    return !!d && d.st === 'idle' && Math.abs(d.x - 300) < 1;
-  }, null, { timeout: 12_000 });
+  await dummyReady(page);
 
   // Z chains light 1 → 4 while each press lands inside the previous recovery
   await startRecording(page);
@@ -173,12 +191,10 @@ test('keyboard: walk in, grab, throw and chain the light combo on the practice d
     await page.keyboard.press('z');
     await page.waitForTimeout(130);
   }
-  await page.waitForTimeout(200);
+  const chain = await chainAtLeast(page, 2);
   const seen = await stopRecording(page);
   expect(seen, 'the light chain ran its four links').toEqual(expect.arrayContaining(['bt_l1', 'bt_l2', 'bt_l3', 'bt_l4']));
-
-  const after = (await look(page))!;
-  expect(after.chain, 'the HUD counts the landed chain').toBeGreaterThanOrEqual(2);
+  expect(chain, 'the HUD counts the landed chain').toBeGreaterThanOrEqual(2);
   expect(errors).toEqual([]);
 });
 
@@ -251,22 +267,17 @@ test('controller: the standard pad walks, grabs, throws and combos with no keybo
     return !!d && ['thrown', 'knock', 'down'].includes(d.st);
   }, null, { timeout: 4_000 });
 
-  await page.waitForFunction(() => {
-    const d = (window as any).__kk.client.latest().ents.find((e: any) => e.def === 'dummy');
-    return !!d && d.st === 'idle' && Math.abs(d.x - 300) < 1;
-  }, null, { timeout: 12_000 });
+  await dummyReady(page);
 
   // X is LIGHT: four pad presses chain the same four-hit string
   await startRecording(page);
   // press inside the previous recovery, like a player drumming the button (the keyboard
   // test uses the same 120 ms cadence)
   for (let i = 0; i < 4; i++) await tap(D.X, 60, 60);
-  await page.waitForTimeout(200);
+  const chain = await chainAtLeast(page, 2);
   const seen = await stopRecording(page);
   expect(seen, 'the pad drove the whole light chain').toEqual(expect.arrayContaining(['bt_l1', 'bt_l2', 'bt_l3', 'bt_l4']));
-
-  const after = (await look(page))!;
-  expect(after.chain, 'the HUD counts the pad-driven chain').toBeGreaterThanOrEqual(2);
+  expect(chain, 'the HUD counts the pad-driven chain').toBeGreaterThanOrEqual(2);
 
   // the rest of the pad's gameplay buttons: A jumps, LB dodges, RB blocks while held.
   // The chain's last link has to finish recovering first, or the jump press lands while
