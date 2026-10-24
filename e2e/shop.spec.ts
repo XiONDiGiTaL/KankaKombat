@@ -204,14 +204,25 @@ test('Marcos works the bodega counter from his own atlas', async ({ page }) => {
       return best;
     };
     const head = peak(read(), 250, top + 9, 384);  // his cap, in every row of the sheet
-    // the greeting row plays first, so two samples a beat apart must differ
+    // The greeting row animates, so the cell has to change between frames. Sample until it
+    // does rather than trusting one fixed gap: a loaded runner can miss whole frames, and a
+    // slow one may not have drawn the next frame yet. Three seconds is generous for a row
+    // that steps several frames a second.
     const before = read();
-    await new Promise((r) => setTimeout(r, 260));
-    const after = read();
     let changed = 0;
-    for (let y = top + 4; y < 98; y++) for (let x = left; x < left + cw; x++) {
-      const i = (y * 384 + x) * 4;
-      if (Math.abs(before[i] - after[i]) + Math.abs(before[i + 1] - after[i + 1]) > 30) changed++;
+    const count = (after: Uint8ClampedArray) => {
+      let n = 0;
+      for (let y = top + 4; y < 98; y++) for (let x = left; x < left + cw; x++) {
+        const i = (y * 384 + x) * 4;
+        if (Math.abs(before[i] - after[i]) + Math.abs(before[i + 1] - after[i + 1]) > 30) n++;
+      }
+      return n;
+    };
+    const deadline = performance.now() + 3_000;
+    while (performance.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 120));
+      changed = count(read());
+      if (changed > 40) break;
     }
     // the same window of the shipped atlas itself, for the cap colour to be compared against
     const atlasCap = peak(ap, ax, 9, img.width);

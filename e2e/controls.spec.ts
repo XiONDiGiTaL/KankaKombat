@@ -73,11 +73,14 @@ async function walkIntoReach(page: Page, hold: () => Promise<void>, release: () 
   return now?.x ?? -1;
 }
 
-/** Record every attack the body performs, sampled faster than a chain step lasts. */
+/** Record every attack the body performs and the longest chain the HUD counted, sampled
+ *  faster than a chain step lasts. The peak is what matters: a chain lives one second, so a
+ *  single read after the last press can miss a count that happened mid-string. */
 async function startRecording(page: Page): Promise<void> {
   await page.evaluate(() => {
     const w = window as any;
     w.__seen = [];
+    w.__maxChain = 0;
     clearInterval(w.__seenTimer);
     w.__seenTimer = setInterval(() => {
       const kk = w.__kk;
@@ -85,15 +88,17 @@ async function startRecording(page: Page): Promise<void> {
       const me = v?.players.find((p: any) => p.pid === kk.client.myId);
       const body = v?.ents.find((e: any) => e.id === me?.id);
       if (body?.atk && !w.__seen.includes(body.atk)) w.__seen.push(body.atk);
+      const n = kk?.renderer?.combos?.get(me?.id)?.n ?? 0;
+      if (n > w.__maxChain) w.__maxChain = n;
     }, 20);
   });
 }
 
-async function stopRecording(page: Page): Promise<string[]> {
+async function stopRecording(page: Page): Promise<{ seen: string[]; maxChain: number }> {
   return page.evaluate(() => {
     const w = window as any;
     clearInterval(w.__seenTimer);
-    return w.__seen as string[];
+    return { seen: w.__seen as string[], maxChain: w.__maxChain as number };
   });
 }
 
@@ -123,16 +128,15 @@ async function dummyReady(page: Page): Promise<void> {
   }, null, { timeout: 12_000 });
 }
 
-/** The HUD chain counter, waited for rather than sampled once: the count only exists from
- *  the second landed hit, and the window is a second long. */
-async function chainAtLeast(page: Page, n: number): Promise<number> {
-  await page.waitForFunction((want) => {
-    const kk = (window as any).__kk;
-    const v = kk.client.latest();
-    const me = v.players.find((p: any) => p.pid === kk.client.myId);
-    return (kk.renderer.combos.get(me?.id)?.n ?? 0) >= (want as number);
-  }, n, { timeout: 2_000 });
-  return ((await look(page))?.chain ?? 0);
+/** Drum a button long enough to cover the whole four-link string. Each link takes about
+ *  200 ms, and a press only chains while it lands inside the previous recovery, so a test
+ *  that presses exactly four times at a fixed cadence loses the last link whenever the
+ *  runner is slow. Drumming for a full second always covers every window. */
+async function drum(page: Page, press: () => Promise<void>, times: number, gapMs: number): Promise<void> {
+  for (let i = 0; i < times; i++) {
+    await press();
+    await page.waitForTimeout(gapMs);
+  }
 }
 
 test('keyboard: jump, dodge and block answer on their shipped keys', async ({ page }) => {
@@ -187,14 +191,10 @@ test('keyboard: walk in, grab, throw and chain the light combo on the practice d
 
   // Z chains light 1 → 4 while each press lands inside the previous recovery
   await startRecording(page);
-  for (let i = 0; i < 4; i++) {
-    await page.keyboard.press('z');
-    await page.waitForTimeout(130);
-  }
-  const chain = await chainAtLeast(page, 2);
-  const seen = await stopRecording(page);
+  await drum(page, () => page.keyboard.press('z'), 14, 70);
+  const { seen, maxChain } = await stopRecording(page);
   expect(seen, 'the light chain ran its four links').toEqual(expect.arrayContaining(['bt_l1', 'bt_l2', 'bt_l3', 'bt_l4']));
-  expect(chain, 'the HUD counts the landed chain').toBeGreaterThanOrEqual(2);
+  expect(maxChain, 'the HUD counts the landed chain').toBeGreaterThanOrEqual(2);
   expect(errors).toEqual([]);
 });
 
@@ -269,15 +269,12 @@ test('controller: the standard pad walks, grabs, throws and combos with no keybo
 
   await dummyReady(page);
 
-  // X is LIGHT: four pad presses chain the same four-hit string
+  // X is LIGHT: pad presses chain the same four-hit string
   await startRecording(page);
-  // press inside the previous recovery, like a player drumming the button (the keyboard
-  // test uses the same 120 ms cadence)
-  for (let i = 0; i < 4; i++) await tap(D.X, 60, 60);
-  const chain = await chainAtLeast(page, 2);
-  const seen = await stopRecording(page);
+  await drum(page, () => tap(D.X, 50, 50), 12, 0);
+  const { seen, maxChain } = await stopRecording(page);
   expect(seen, 'the pad drove the whole light chain').toEqual(expect.arrayContaining(['bt_l1', 'bt_l2', 'bt_l3', 'bt_l4']));
-  expect(chain, 'the HUD counts the pad-driven chain').toBeGreaterThanOrEqual(2);
+  expect(maxChain, 'the HUD counts the pad-driven chain').toBeGreaterThanOrEqual(2);
 
   // the rest of the pad's gameplay buttons: A jumps, LB dodges, RB blocks while held.
   // The chain's last link has to finish recovering first, or the jump press lands while
